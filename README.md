@@ -1,10 +1,10 @@
-# AWS to Nexterp Deployment Plan
+# AWS Deployment Plan for ERPNext (Frappe)
 
-This document defines a detailed deployment plan for running Nexterp on AWS with strong backup practices and a strict data residency policy.
+This document defines a detailed deployment plan for running ERPNext (Frappe) on AWS with strong backup practices and a strict data residency policy.
 
 ## 1. Goals
 
-- Deploy Nexterp on AWS in a production-ready architecture.
+- Deploy ERPNext on AWS in a production-ready architecture.
 - Ensure reliable backups and tested recovery.
 - Avoid multi-national redundancy and cross-country data replication.
 
@@ -30,21 +30,46 @@ This document defines a detailed deployment plan for running Nexterp on AWS with
 
 Choose one deployment model:
 
-- Option A: ECS Fargate (recommended for containerized Nexterp).
-- Option B: EC2 Auto Scaling Group (if Nexterp requires host-level control).
+- Option A: ECS Fargate (recommended for containerized ERPNext/Frappe).
+- Option B: EC2 Auto Scaling Group (if ERPNext requires host-level control).
 
 Minimum production setup:
 
-- 2 application tasks/instances across 2 AZs.
+- 2 or more tasks/instances for web and background workers across 2 AZs.
 - Auto scaling based on CPU, memory, and request count.
 - Rolling or blue/green deployments.
 
+For ERPNext, run separate process groups:
+
+- `web` service for HTTP requests.
+- `socketio` service for realtime events.
+- `worker-short`, `worker-default`, `worker-long` for queue processing.
+- `schedule` service for cron-like jobs.
+
 ### 3.3 Data Layer
 
-- Use Amazon RDS (PostgreSQL or MySQL based on Nexterp requirement).
+- Use a fully managed AWS database tier.
+- Preferred: Amazon Aurora MySQL-compatible (managed, HA, autoscaling storage).
+- Alternative: Amazon RDS for MariaDB (managed, widely used with ERPNext).
 - Enable Multi-AZ for high availability.
 - Enable automatic backups and point-in-time recovery.
 - Use encrypted storage (KMS-managed keys).
+
+Database operations model (low-ops):
+
+- No self-managed database on EC2.
+- Use AWS-managed patching windows and automatic minor version upgrades.
+- Use RDS Proxy for connection management and failover resilience.
+- Enable Performance Insights and Enhanced Monitoring.
+- Use automated backup retention and copy policies.
+- Restrict direct DB access; app connects through private endpoints only.
+
+For ERPNext dependencies:
+
+- Use Amazon ElastiCache for Redis with three logical endpoints/usages:
+  - Redis cache
+  - Redis queue
+  - Redis socketio
 
 ### 3.4 Storage
 
@@ -74,16 +99,90 @@ Minimum production setup:
 
 1. Confirm approved country and AWS Region.
 2. Provision network (VPC, subnets, route tables, NAT, security groups).
-3. Provision data services (RDS, parameter groups, subnet group, backups).
+3. Provision data services (Aurora or RDS, parameter groups, subnet group, backups, proxy).
 4. Provision compute platform (ECS service or EC2 ASG).
 5. Configure ALB, TLS certificates (ACM), HTTPS listener, target groups.
 6. Configure Secrets Manager and application environment variables.
-7. Deploy Nexterp application build.
+7. Deploy ERPNext application build.
 8. Run database migrations.
 9. Execute smoke tests and health checks.
 10. Enable autoscaling and production alarms.
 11. Run backup validation and restore drill before go-live.
 12. Cut over traffic and monitor closely for 24-48 hours.
+
+## 4.1 ERPNext-Specific Deployment Fit
+
+This design can host `frappe/erpnext` directly and supports production traffic because it includes:
+
+- Stateless app containers/instances behind ALB.
+- Managed MariaDB with Multi-AZ.
+- Managed database operations (AWS handles patching, backups, failover mechanics).
+- Dedicated Redis roles for cache/queue/socketio.
+- Isolated worker services for async jobs.
+- TLS termination at ALB and private-only backend tiers.
+
+Recommended compute sizing (starting point):
+
+- Web: 2 tasks, 1 vCPU, 2 GB RAM each.
+- Socketio: 2 tasks, 0.5 vCPU, 1 GB RAM each.
+- Workers (each queue type): 1-2 tasks, 1 vCPU, 2 GB RAM.
+- Scheduler: 1 task, 0.5 vCPU, 512 MB-1 GB RAM.
+
+Scale after load testing based on queue depth, request latency, and worker execution time.
+
+## 4.2 ERPNext Configuration (How It Is Configured)
+
+### A. Required Environment/Secrets
+
+Store in AWS Secrets Manager and inject at runtime:
+
+- `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD`
+- `REDIS_CACHE`, `REDIS_QUEUE`, `REDIS_SOCKETIO`
+- `SITE_NAME` (for single-site) or site mapping for multi-site
+- `FRAPPE_SITE_NAME_HEADER` (usually `Host`)
+
+Use managed endpoints instead of instance IPs:
+
+- `DB_HOST` should point to Aurora/RDS writer endpoint (or RDS Proxy endpoint).
+- Keep credentials in Secrets Manager with scheduled rotation.
+
+### B. `common_site_config.json` Pattern
+
+Set these values in the container startup or config volume:
+
+```json
+{
+  "db_host": "<rds-endpoint>",
+  "db_port": 3306,
+  "redis_cache": "redis://<cache-endpoint>:6379",
+  "redis_queue": "redis://<queue-endpoint>:6379",
+  "redis_socketio": "redis://<socketio-endpoint>:6379",
+  "socketio_port": 9000
+}
+```
+
+### C. Site-Level Config
+
+Per-site `site_config.json` should include database name/user and site-specific keys.
+Do not store plaintext secrets in source control.
+
+### D. Nginx/Proxy and Realtime
+
+- Route `/socket.io` to the `socketio` service.
+- Keep sticky sessions only if required by custom apps.
+- Ensure forwarded headers are preserved (`Host`, `X-Forwarded-Proto`).
+
+### E. Background Jobs and Scheduler
+
+- Ensure all worker queues are running continuously.
+- Run exactly one scheduler task in production.
+- Monitor queue backlog and failed jobs.
+
+### F. Storage and Files
+
+- Keep ERPNext private/public files on durable shared storage.
+- Preferred: S3-backed object storage integration for attachments and backups.
+- Enforce lifecycle policies and encryption on file buckets.
 
 ## 5. Backup Plan
 
@@ -114,6 +213,7 @@ Minimum production setup:
 - Restrict restore and delete permissions to a small admin group.
 - Enable MFA delete where applicable.
 - Log all backup and restore operations via CloudTrail.
+- Test a quarterly failover for Aurora/RDS Multi-AZ as part of resilience checks.
 
 ### 5.5 Recovery Targets
 
@@ -173,7 +273,15 @@ Maintain runbooks for:
 - Backup jobs are running and monitored.
 - Restore drill passed.
 - No resources outside approved in-country Region set.
-- Nexterp business smoke tests passed.
+- ERPNext business smoke tests passed.
+
+ERPNext-specific acceptance checks:
+
+- Desk login works over HTTPS.
+- Realtime notifications and websocket events work.
+- Background jobs are processed by all worker queues.
+- Scheduled jobs run successfully.
+- File upload/download works for public and private files.
 
 ## 10. Suggested Next Actions
 
