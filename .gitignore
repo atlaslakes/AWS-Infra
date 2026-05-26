@@ -1,0 +1,23 @@
+# Secrets & credentials — never commit
+.env
+.env.*
+!.env.example
+
+# AWS CLI config (contains credentials)
+.aws/
+
+# Terraform state & secrets
+*.tfstate
+*.tfstate.backup
+*.tfvars
+!*.tfvars.example
+.terraform/
+.terraform.lock.hcl
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
