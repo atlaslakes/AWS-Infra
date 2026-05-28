@@ -1,0 +1,55 @@
+name: Add ERPNext Customer
+
+on:
+  workflow_dispatch:
+    inputs:
+      customer_name:
+        description: Customer name
+        required: true
+      customer_type:
+        description: Individual or Company
+        required: false
+        default: Company
+        type: choice
+        options:
+          - Company
+          - Individual
+      customer_group:
+        description: Customer group
+        required: false
+        default: Commercial
+      territory:
+        description: Territory
+        required: false
+        default: All Territories
+
+jobs:
+  add-customer:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create customer via ERPNext API
+        run: |
+          RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
+            "${{ vars.ERPNEXT_URL }}/api/resource/Customer" \
+            -H "Authorization: Basic $(echo -n 'Administrator:${{ secrets.ADMIN_PASSWORD }}' | base64)" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "customer_name":  "${{ inputs.customer_name }}",
+              "customer_type":  "${{ inputs.customer_type }}",
+              "customer_group": "${{ inputs.customer_group }}",
+              "territory":      "${{ inputs.territory }}"
+            }')
+
+          BODY=$(echo "$RESPONSE" | head -n -1)
+          STATUS=$(echo "$RESPONSE" | tail -n 1)
+
+          echo "HTTP $STATUS"
+          echo "$BODY" | python3 -m json.tool
+
+          if [ "$STATUS" != "200" ]; then
+            echo "::error::ERPNext returned HTTP $STATUS"
+            exit 1
+          fi
+
+          NAME=$(echo "$BODY" | python3 -c "import sys,json; print(json.load(sys.stdin)['data']['name'])")
+          echo "::notice::Customer created: $NAME"
