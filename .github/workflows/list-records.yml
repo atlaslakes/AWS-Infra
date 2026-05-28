@@ -1,0 +1,70 @@
+name: List ERPNext Records
+
+on:
+  workflow_dispatch:
+    inputs:
+      doctype:
+        description: DocType to list
+        required: true
+        default: Customer
+        type: choice
+        options:
+          - Customer
+          - Supplier
+          - Item
+          - Sales Invoice
+          - Purchase Invoice
+          - Sales Order
+          - Purchase Order
+          - Contact
+          - Address
+      limit:
+        description: Number of records to return
+        required: false
+        default: "20"
+      filters:
+        description: 'JSON filters e.g. [["status","=","Draft"]] (optional)'
+        required: false
+
+jobs:
+  list-records:
+    runs-on: ubuntu-latest
+    steps:
+      - name: List records via ERPNext API
+        run: |
+          FILTERS="${{ inputs.filters }}"
+          if [ -z "$FILTERS" ]; then
+            FILTERS="[]"
+          fi
+
+          ENCODED_FILTERS=$(python3 -c "import urllib.parse,sys; print(urllib.parse.quote('$FILTERS'))")
+          DOCTYPE=$(python3 -c "import urllib.parse; print(urllib.parse.quote('${{ inputs.doctype }}'))")
+
+          RESPONSE=$(curl -s -w "\n%{http_code}" -G \
+            "${{ vars.ERPNEXT_URL }}/api/resource/$DOCTYPE" \
+            -H "Authorization: token ${{ secrets.ERPNEXT_API_KEY }}:${{ secrets.ERPNEXT_API_SECRET }}" \
+            --data-urlencode "limit=${{ inputs.limit }}" \
+            --data-urlencode "filters=$FILTERS" \
+            --data-urlencode "fields=[\"name\",\"creation\",\"modified\"]")
+
+          BODY=$(echo "$RESPONSE" | head -n -1)
+          STATUS=$(echo "$RESPONSE" | tail -n 1)
+
+          echo "HTTP $STATUS"
+
+          if [ "$STATUS" != "200" ]; then
+            echo "$BODY"
+            echo "::error::ERPNext returned HTTP $STATUS"
+            exit 1
+          fi
+
+          COUNT=$(echo "$BODY" | python3 -c "import sys,json; d=json.load(sys.stdin); print(len(d['data']))")
+          echo "::notice::Found $COUNT record(s) in ${{ inputs.doctype }}"
+
+          echo "--- Records ---"
+          echo "$BODY" | python3 -c "
+          import sys, json
+          data = json.load(sys.stdin)['data']
+          for r in data:
+              print(r['name'])
+          "

@@ -1,0 +1,50 @@
+name: Add ERPNext Supplier
+
+on:
+  workflow_dispatch:
+    inputs:
+      supplier_name:
+        description: Supplier name
+        required: true
+      supplier_type:
+        description: Individual or Company
+        required: false
+        default: Company
+        type: choice
+        options:
+          - Company
+          - Individual
+      supplier_group:
+        description: Supplier group
+        required: false
+        default: All Supplier Groups
+
+jobs:
+  add-supplier:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create supplier via ERPNext API
+        run: |
+          RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
+            "${{ vars.ERPNEXT_URL }}/api/resource/Supplier" \
+            -H "Authorization: token ${{ secrets.ERPNEXT_API_KEY }}:${{ secrets.ERPNEXT_API_SECRET }}" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "supplier_name":  "${{ inputs.supplier_name }}",
+              "supplier_type":  "${{ inputs.supplier_type }}",
+              "supplier_group": "${{ inputs.supplier_group }}"
+            }')
+
+          BODY=$(echo "$RESPONSE" | head -n -1)
+          STATUS=$(echo "$RESPONSE" | tail -n 1)
+
+          echo "HTTP $STATUS"
+          echo "$BODY" | python3 -m json.tool
+
+          if [ "$STATUS" != "200" ]; then
+            echo "::error::ERPNext returned HTTP $STATUS"
+            exit 1
+          fi
+
+          NAME=$(echo "$BODY" | python3 -c "import sys,json; print(json.load(sys.stdin)['data']['name'])")
+          echo "::notice::Supplier created: $NAME"

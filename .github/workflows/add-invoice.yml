@@ -1,0 +1,66 @@
+name: Add ERPNext Sales Invoice
+
+on:
+  workflow_dispatch:
+    inputs:
+      customer:
+        description: Customer name (must exist in ERPNext)
+        required: true
+      item_code:
+        description: Item code (must exist in ERPNext)
+        required: true
+      qty:
+        description: Quantity
+        required: false
+        default: "1"
+      rate:
+        description: Unit rate (price)
+        required: true
+      posting_date:
+        description: Invoice date (YYYY-MM-DD, defaults to today)
+        required: false
+
+jobs:
+  add-invoice:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create sales invoice via ERPNext API
+        run: |
+          POSTING_DATE="${{ inputs.posting_date }}"
+          if [ -z "$POSTING_DATE" ]; then
+            POSTING_DATE=$(date +%Y-%m-%d)
+          fi
+
+          PAYLOAD=$(python3 -c "
+          import json
+          d = {
+            'customer':      '${{ inputs.customer }}',
+            'posting_date':  '$POSTING_DATE',
+            'items': [{
+              'item_code': '${{ inputs.item_code }}',
+              'qty':       ${{ inputs.qty }},
+              'rate':      ${{ inputs.rate }}
+            }]
+          }
+          print(json.dumps(d))
+          ")
+
+          RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
+            "${{ vars.ERPNEXT_URL }}/api/resource/Sales Invoice" \
+            -H "Authorization: token ${{ secrets.ERPNEXT_API_KEY }}:${{ secrets.ERPNEXT_API_SECRET }}" \
+            -H "Content-Type: application/json" \
+            -d "$PAYLOAD")
+
+          BODY=$(echo "$RESPONSE" | head -n -1)
+          STATUS=$(echo "$RESPONSE" | tail -n 1)
+
+          echo "HTTP $STATUS"
+          echo "$BODY" | python3 -m json.tool
+
+          if [ "$STATUS" != "200" ]; then
+            echo "::error::ERPNext returned HTTP $STATUS"
+            exit 1
+          fi
+
+          NAME=$(echo "$BODY" | python3 -c "import sys,json; print(json.load(sys.stdin)['data']['name'])")
+          echo "::notice::Sales Invoice created: $NAME"

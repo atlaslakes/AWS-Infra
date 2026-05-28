@@ -1,0 +1,44 @@
+name: Destroy ERPNext Stack
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: Type "destroy" to confirm — this deletes ALL AWS resources
+        required: true
+
+jobs:
+  destroy-stack:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Validate confirmation
+        run: |
+          if [ "${{ inputs.confirm }}" != "destroy" ]; then
+            echo "::error::You must type exactly 'destroy' to confirm. Got: '${{ inputs.confirm }}'"
+            exit 1
+          fi
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v6.1.2
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: us-east-1
+
+      - name: Delete CloudFormation stack
+        run: |
+          echo "Deleting stack erpnext-poc..."
+
+          aws cloudformation delete-stack \
+            --stack-name erpnext-poc \
+            --no-cli-pager
+
+          echo "Waiting for deletion to complete..."
+
+          aws cloudformation wait stack-delete-complete \
+            --stack-name erpnext-poc \
+            --no-cli-pager
+
+          echo "::notice::Stack erpnext-poc deleted successfully"

@@ -1,0 +1,76 @@
+name: Add ERPNext Item
+
+on:
+  workflow_dispatch:
+    inputs:
+      item_code:
+        description: Item code (unique ID)
+        required: true
+      item_name:
+        description: Item name (display name, defaults to item_code)
+        required: false
+      item_group:
+        description: Item group
+        required: false
+        default: All Item Groups
+      stock_uom:
+        description: Unit of measure
+        required: false
+        default: Nos
+      is_stock_item:
+        description: Is this a stocked item?
+        required: false
+        default: "1"
+        type: choice
+        options:
+          - "1"
+          - "0"
+      standard_rate:
+        description: Standard selling rate (leave blank to skip)
+        required: false
+
+jobs:
+  add-item:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create item via ERPNext API
+        run: |
+          ITEM_NAME="${{ inputs.item_name }}"
+          if [ -z "$ITEM_NAME" ]; then
+            ITEM_NAME="${{ inputs.item_code }}"
+          fi
+
+          PAYLOAD=$(python3 -c "
+          import json, sys
+          d = {
+            'item_code':     '${{ inputs.item_code }}',
+            'item_name':     '$ITEM_NAME',
+            'item_group':    '${{ inputs.item_group }}',
+            'stock_uom':     '${{ inputs.stock_uom }}',
+            'is_stock_item': ${{ inputs.is_stock_item }}
+          }
+          rate = '${{ inputs.standard_rate }}'.strip()
+          if rate:
+            d['standard_rate'] = float(rate)
+          print(json.dumps(d))
+          ")
+
+          RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
+            "${{ vars.ERPNEXT_URL }}/api/resource/Item" \
+            -H "Authorization: token ${{ secrets.ERPNEXT_API_KEY }}:${{ secrets.ERPNEXT_API_SECRET }}" \
+            -H "Content-Type: application/json" \
+            -d "$PAYLOAD")
+
+          BODY=$(echo "$RESPONSE" | head -n -1)
+          STATUS=$(echo "$RESPONSE" | tail -n 1)
+
+          echo "HTTP $STATUS"
+          echo "$BODY" | python3 -m json.tool
+
+          if [ "$STATUS" != "200" ]; then
+            echo "::error::ERPNext returned HTTP $STATUS"
+            exit 1
+          fi
+
+          NAME=$(echo "$BODY" | python3 -c "import sys,json; print(json.load(sys.stdin)['data']['name'])")
+          echo "::notice::Item created: $NAME"
