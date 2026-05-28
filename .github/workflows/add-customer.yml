@@ -31,7 +31,7 @@ jobs:
         run: |
           RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
             "${{ vars.ERPNEXT_URL }}/api/resource/Customer" \
-            -H "Authorization: Basic $(echo -n 'Administrator:${{ secrets.ADMIN_PASSWORD }}' | base64)" \
+            -H "Authorization: token ${{ secrets.ERPNEXT_API_KEY }}:${{ secrets.ERPNEXT_API_SECRET }}" \
             -H "Content-Type: application/json" \
             -d '{
               "customer_name":  "${{ inputs.customer_name }}",
