@@ -1,0 +1,16 @@
+{
+  "InstanceIds": ["i-0be6845d8493d077a"],
+  "DocumentName": "AWS-RunShellScript",
+  "Parameters": {
+    "commands": [
+      "echo '=== Installing MySQL client ==='",
+      "dnf install -y mariadb105 2>&1 | tail -3",
+      "echo ''",
+      "echo '=== Connecting to RDS and querying customers ==='",
+      "mysql -h erpnext-poc-erpnextdb-ooorv168mrw1.c2diyosis802.us-east-1.rds.amazonaws.com -u erpnext -pAtlasLakesAws123! --table -e \"USE _5e5899d8398b5f7b; SELECT name AS customer_id, customer_name, customer_type, IFNULL(customer_group,'—') AS customer_group, DATE_FORMAT(creation,'%Y-%m-%d %H:%i') AS created_at FROM tabCustomer ORDER BY creation DESC;\" 2>/dev/null",
+      "echo ''",
+      "echo '=== RDS instance info from inside the DB ==='",
+      "mysql -h erpnext-poc-erpnextdb-ooorv168mrw1.c2diyosis802.us-east-1.rds.amazonaws.com -u erpnext -pAtlasLakesAws123! --table -e \"SELECT @@hostname AS rds_hostname, @@version AS version, DATABASE() AS current_db;\" 2>/dev/null"
+    ]
+  }
+}

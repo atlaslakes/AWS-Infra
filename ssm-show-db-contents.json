@@ -1,0 +1,22 @@
+{
+  "InstanceIds": ["i-0be6845d8493d077a"],
+  "DocumentName": "AWS-RunShellScript",
+  "Parameters": {
+    "commands": [
+      "echo '=== Database name and size ==='",
+      "docker exec -w /home/frappe/frappe-bench frappe_docker-backend-1 bench --site frontend execute frappe.db.sql --args \"['SELECT DATABASE() AS db_name, ROUND(SUM(data_length + index_length) / 1024 / 1024, 2) AS size_mb FROM information_schema.tables WHERE table_schema = DATABASE()']\"",
+      "echo ''",
+      "echo '=== Total tables ==='",
+      "docker exec -w /home/frappe/frappe-bench frappe_docker-backend-1 bench --site frontend execute frappe.db.sql --args \"['SELECT COUNT(*) AS total_tables FROM information_schema.tables WHERE table_schema = DATABASE()']\"",
+      "echo ''",
+      "echo '=== Row counts for key ERPNext tables ==='",
+      "docker exec -w /home/frappe/frappe-bench frappe_docker-backend-1 bench --site frontend execute frappe.db.sql --args \"['SELECT table_name, table_rows FROM information_schema.tables WHERE table_schema = DATABASE() AND table_rows > 0 ORDER BY table_rows DESC LIMIT 30']\"",
+      "echo ''",
+      "echo '=== Site config (site_config.json) ==='",
+      "cat /var/lib/docker/volumes/frappe_docker_sites/_data/frontend/site_config.json",
+      "echo ''",
+      "echo '=== Installed apps ==='",
+      "docker exec -w /home/frappe/frappe-bench frappe_docker-backend-1 bench --site frontend list-apps"
+    ]
+  }
+}
