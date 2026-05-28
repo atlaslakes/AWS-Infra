@@ -1,0 +1,80 @@
+name: Add ERPNext Lead
+
+on:
+  workflow_dispatch:
+    inputs:
+      lead_name:
+        description: Full name of the lead
+        required: true
+      company_name:
+        description: Company name (optional)
+        required: false
+      email_id:
+        description: Email address (optional)
+        required: false
+      mobile_no:
+        description: Mobile number (optional)
+        required: false
+      lead_owner:
+        description: ERPNext user who owns this lead (optional)
+        required: false
+      source:
+        description: Lead source
+        required: false
+        default: Cold Calling
+        type: choice
+        options:
+          - Cold Calling
+          - Advertisement
+          - Campaign
+          - Email
+          - Exhibition
+          - Internal
+          - Referral
+          - Walk In
+          - Website
+          - Word of Mouth
+          - Other
+
+jobs:
+  add-lead:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create lead via ERPNext API
+        run: |
+          PAYLOAD=$(python3 -c "
+          import json
+          d = {
+            'lead_name': '${{ inputs.lead_name }}',
+            'source':    '${{ inputs.source }}'
+          }
+          company = '${{ inputs.company_name }}'.strip()
+          email   = '${{ inputs.email_id }}'.strip()
+          mobile  = '${{ inputs.mobile_no }}'.strip()
+          owner   = '${{ inputs.lead_owner }}'.strip()
+          if company: d['company_name'] = company
+          if email:   d['email_id']     = email
+          if mobile:  d['mobile_no']    = mobile
+          if owner:   d['lead_owner']   = owner
+          print(json.dumps(d))
+          ")
+
+          RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
+            "${{ vars.ERPNEXT_URL }}/api/resource/Lead" \
+            -H "Authorization: token ${{ secrets.ERPNEXT_API_KEY }}:${{ secrets.ERPNEXT_API_SECRET }}" \
+            -H "Content-Type: application/json" \
+            -d "$PAYLOAD")
+
+          BODY=$(echo "$RESPONSE" | head -n -1)
+          STATUS=$(echo "$RESPONSE" | tail -n 1)
+
+          echo "HTTP $STATUS"
+          echo "$BODY" | python3 -m json.tool
+
+          if [ "$STATUS" != "200" ]; then
+            echo "::error::ERPNext returned HTTP $STATUS"
+            exit 1
+          fi
+
+          NAME=$(echo "$BODY" | python3 -c "import sys,json; print(json.load(sys.stdin)['data']['name'])")
+          echo "::notice::Lead created: $NAME"

@@ -1,0 +1,87 @@
+name: Add ERPNext Task
+
+on:
+  workflow_dispatch:
+    inputs:
+      subject:
+        description: Task title/subject
+        required: true
+      project:
+        description: Project name (must exist in ERPNext, optional)
+        required: false
+      assigned_to:
+        description: ERPNext user email to assign (optional)
+        required: false
+      priority:
+        description: Priority level
+        required: false
+        default: Medium
+        type: choice
+        options:
+          - Low
+          - Medium
+          - High
+          - Urgent
+      exp_start_date:
+        description: Expected start date (YYYY-MM-DD, defaults to today)
+        required: false
+      exp_end_date:
+        description: Expected end date (YYYY-MM-DD, defaults to 7 days from today)
+        required: false
+      description:
+        description: Task description (optional)
+        required: false
+
+jobs:
+  add-task:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create task via ERPNext API
+        run: |
+          START_DATE="${{ inputs.exp_start_date }}"
+          if [ -z "$START_DATE" ]; then
+            START_DATE=$(date +%Y-%m-%d)
+          fi
+
+          END_DATE="${{ inputs.exp_end_date }}"
+          if [ -z "$END_DATE" ]; then
+            END_DATE=$(python3 -c "from datetime import date, timedelta; print(date.today() + timedelta(days=7))")
+          fi
+
+          PAYLOAD=$(python3 -c "
+          import json
+          d = {
+            'subject':        '${{ inputs.subject }}',
+            'priority':       '${{ inputs.priority }}',
+            'exp_start_date': '$START_DATE',
+            'exp_end_date':   '$END_DATE',
+            'status':         'Open'
+          }
+          project     = '${{ inputs.project }}'.strip()
+          assigned_to = '${{ inputs.assigned_to }}'.strip()
+          description = '${{ inputs.description }}'.strip()
+          if project:     d['project']     = project
+          if assigned_to: d['assigned_to'] = assigned_to
+          if description: d['description'] = description
+          print(json.dumps(d))
+          ")
+
+          RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
+            "${{ vars.ERPNEXT_URL }}/api/resource/Task" \
+            -H "Authorization: token ${{ secrets.ERPNEXT_API_KEY }}:${{ secrets.ERPNEXT_API_SECRET }}" \
+            -H "Content-Type: application/json" \
+            -d "$PAYLOAD")
+
+          BODY=$(echo "$RESPONSE" | head -n -1)
+          STATUS=$(echo "$RESPONSE" | tail -n 1)
+
+          echo "HTTP $STATUS"
+          echo "$BODY" | python3 -m json.tool
+
+          if [ "$STATUS" != "200" ]; then
+            echo "::error::ERPNext returned HTTP $STATUS"
+            exit 1
+          fi
+
+          NAME=$(echo "$BODY" | python3 -c "import sys,json; print(json.load(sys.stdin)['data']['name'])")
+          echo "::notice::Task created: $NAME"

@@ -1,0 +1,76 @@
+name: Add ERPNext Opportunity
+
+on:
+  workflow_dispatch:
+    inputs:
+      opportunity_from:
+        description: Linked from Lead or Customer
+        required: true
+        default: Lead
+        type: choice
+        options:
+          - Lead
+          - Customer
+      party_name:
+        description: Lead name or Customer name (must exist in ERPNext)
+        required: true
+      opportunity_type:
+        description: Opportunity type
+        required: false
+        default: Sales
+      expected_revenue:
+        description: Expected revenue amount
+        required: false
+        default: "0"
+      probability:
+        description: Probability % (0-100)
+        required: false
+        default: "50"
+      close_date:
+        description: Expected close date (YYYY-MM-DD, defaults to 30 days from today)
+        required: false
+
+jobs:
+  add-opportunity:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create opportunity via ERPNext API
+        run: |
+          CLOSE_DATE="${{ inputs.close_date }}"
+          if [ -z "$CLOSE_DATE" ]; then
+            CLOSE_DATE=$(python3 -c "from datetime import date, timedelta; print(date.today() + timedelta(days=30))")
+          fi
+
+          PAYLOAD=$(python3 -c "
+          import json
+          d = {
+            'opportunity_from': '${{ inputs.opportunity_from }}',
+            'party_name':       '${{ inputs.party_name }}',
+            'opportunity_type': '${{ inputs.opportunity_type }}',
+            'expected_revenue': ${{ inputs.expected_revenue }},
+            'probability':      ${{ inputs.probability }},
+            'transaction_date': '$(date +%Y-%m-%d)',
+            'expected_closing': '$CLOSE_DATE'
+          }
+          print(json.dumps(d))
+          ")
+
+          RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
+            "${{ vars.ERPNEXT_URL }}/api/resource/Opportunity" \
+            -H "Authorization: token ${{ secrets.ERPNEXT_API_KEY }}:${{ secrets.ERPNEXT_API_SECRET }}" \
+            -H "Content-Type: application/json" \
+            -d "$PAYLOAD")
+
+          BODY=$(echo "$RESPONSE" | head -n -1)
+          STATUS=$(echo "$RESPONSE" | tail -n 1)
+
+          echo "HTTP $STATUS"
+          echo "$BODY" | python3 -m json.tool
+
+          if [ "$STATUS" != "200" ]; then
+            echo "::error::ERPNext returned HTTP $STATUS"
+            exit 1
+          fi
+
+          NAME=$(echo "$BODY" | python3 -c "import sys,json; print(json.load(sys.stdin)['data']['name'])")
+          echo "::notice::Opportunity created: $NAME"

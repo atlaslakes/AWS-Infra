@@ -1,0 +1,80 @@
+name: Add ERPNext Stock Entry
+
+on:
+  workflow_dispatch:
+    inputs:
+      stock_entry_type:
+        description: Type of stock movement
+        required: true
+        default: Material Receipt
+        type: choice
+        options:
+          - Material Receipt
+          - Material Issue
+          - Material Transfer
+          - Manufacture
+      item_code:
+        description: Item code (must exist in ERPNext)
+        required: true
+      qty:
+        description: Quantity
+        required: true
+      source_warehouse:
+        description: Source warehouse (required for Issue and Transfer)
+        required: false
+        default: ""
+      target_warehouse:
+        description: Target warehouse (required for Receipt and Transfer)
+        required: false
+        default: Stores - AT
+      basic_rate:
+        description: Valuation rate per unit (required for Material Receipt)
+        required: false
+        default: "0"
+
+jobs:
+  add-stock-entry:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create stock entry via ERPNext API
+        run: |
+          PAYLOAD=$(python3 -c "
+          import json
+          entry_type = '${{ inputs.stock_entry_type }}'
+          item = {
+            'item_code':    '${{ inputs.item_code }}',
+            'qty':          ${{ inputs.qty }},
+            'basic_rate':   ${{ inputs.basic_rate }}
+          }
+          source = '${{ inputs.source_warehouse }}'.strip()
+          target = '${{ inputs.target_warehouse }}'.strip()
+          if source: item['s_warehouse'] = source
+          if target: item['t_warehouse'] = target
+
+          d = {
+            'stock_entry_type': entry_type,
+            'posting_date':     '$(date +%Y-%m-%d)',
+            'items': [item]
+          }
+          print(json.dumps(d))
+          ")
+
+          RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
+            "${{ vars.ERPNEXT_URL }}/api/resource/Stock Entry" \
+            -H "Authorization: token ${{ secrets.ERPNEXT_API_KEY }}:${{ secrets.ERPNEXT_API_SECRET }}" \
+            -H "Content-Type: application/json" \
+            -d "$PAYLOAD")
+
+          BODY=$(echo "$RESPONSE" | head -n -1)
+          STATUS=$(echo "$RESPONSE" | tail -n 1)
+
+          echo "HTTP $STATUS"
+          echo "$BODY" | python3 -m json.tool
+
+          if [ "$STATUS" != "200" ]; then
+            echo "::error::ERPNext returned HTTP $STATUS"
+            exit 1
+          fi
+
+          NAME=$(echo "$BODY" | python3 -c "import sys,json; print(json.load(sys.stdin)['data']['name'])")
+          echo "::notice::Stock Entry created: $NAME"

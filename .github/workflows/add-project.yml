@@ -1,0 +1,80 @@
+name: Add ERPNext Project
+
+on:
+  workflow_dispatch:
+    inputs:
+      project_name:
+        description: Project name
+        required: true
+      customer:
+        description: Customer (optional)
+        required: false
+      expected_start_date:
+        description: Expected start date (YYYY-MM-DD, defaults to today)
+        required: false
+      expected_end_date:
+        description: Expected end date (YYYY-MM-DD, defaults to 30 days from today)
+        required: false
+      estimated_costing:
+        description: Estimated budget
+        required: false
+        default: "0"
+      project_type:
+        description: Project type
+        required: false
+        default: External
+        type: choice
+        options:
+          - External
+          - Internal
+
+jobs:
+  add-project:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create project via ERPNext API
+        run: |
+          START_DATE="${{ inputs.expected_start_date }}"
+          if [ -z "$START_DATE" ]; then
+            START_DATE=$(date +%Y-%m-%d)
+          fi
+
+          END_DATE="${{ inputs.expected_end_date }}"
+          if [ -z "$END_DATE" ]; then
+            END_DATE=$(python3 -c "from datetime import date, timedelta; print(date.today() + timedelta(days=30))")
+          fi
+
+          PAYLOAD=$(python3 -c "
+          import json
+          d = {
+            'project_name':        '${{ inputs.project_name }}',
+            'project_type':        '${{ inputs.project_type }}',
+            'expected_start_date': '$START_DATE',
+            'expected_end_date':   '$END_DATE',
+            'estimated_costing':   ${{ inputs.estimated_costing }},
+            'status':              'Open'
+          }
+          customer = '${{ inputs.customer }}'.strip()
+          if customer: d['customer'] = customer
+          print(json.dumps(d))
+          ")
+
+          RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
+            "${{ vars.ERPNEXT_URL }}/api/resource/Project" \
+            -H "Authorization: token ${{ secrets.ERPNEXT_API_KEY }}:${{ secrets.ERPNEXT_API_SECRET }}" \
+            -H "Content-Type: application/json" \
+            -d "$PAYLOAD")
+
+          BODY=$(echo "$RESPONSE" | head -n -1)
+          STATUS=$(echo "$RESPONSE" | tail -n 1)
+
+          echo "HTTP $STATUS"
+          echo "$BODY" | python3 -m json.tool
+
+          if [ "$STATUS" != "200" ]; then
+            echo "::error::ERPNext returned HTTP $STATUS"
+            exit 1
+          fi
+
+          NAME=$(echo "$BODY" | python3 -c "import sys,json; print(json.load(sys.stdin)['data']['name'])")
+          echo "::notice::Project created: $NAME"

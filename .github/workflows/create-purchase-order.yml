@@ -1,0 +1,68 @@
+name: Create ERPNext Purchase Order
+
+on:
+  workflow_dispatch:
+    inputs:
+      supplier:
+        description: Supplier name (must exist in ERPNext)
+        required: true
+      item_code:
+        description: Item code (must exist in ERPNext)
+        required: true
+      qty:
+        description: Quantity
+        required: false
+        default: "1"
+      rate:
+        description: Unit rate (price)
+        required: true
+      schedule_date:
+        description: Required by date (YYYY-MM-DD, defaults to 7 days from today)
+        required: false
+
+jobs:
+  create-purchase-order:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create purchase order via ERPNext API
+        run: |
+          SCHEDULE_DATE="${{ inputs.schedule_date }}"
+          if [ -z "$SCHEDULE_DATE" ]; then
+            SCHEDULE_DATE=$(python3 -c "from datetime import date, timedelta; print(date.today() + timedelta(days=7))")
+          fi
+
+          PAYLOAD=$(python3 -c "
+          import json
+          d = {
+            'supplier':       '${{ inputs.supplier }}',
+            'transaction_date': '$(date +%Y-%m-%d)',
+            'schedule_date':  '$SCHEDULE_DATE',
+            'items': [{
+              'item_code':     '${{ inputs.item_code }}',
+              'qty':           ${{ inputs.qty }},
+              'rate':          ${{ inputs.rate }},
+              'schedule_date': '$SCHEDULE_DATE'
+            }]
+          }
+          print(json.dumps(d))
+          ")
+
+          RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
+            "${{ vars.ERPNEXT_URL }}/api/resource/Purchase Order" \
+            -H "Authorization: token ${{ secrets.ERPNEXT_API_KEY }}:${{ secrets.ERPNEXT_API_SECRET }}" \
+            -H "Content-Type: application/json" \
+            -d "$PAYLOAD")
+
+          BODY=$(echo "$RESPONSE" | head -n -1)
+          STATUS=$(echo "$RESPONSE" | tail -n 1)
+
+          echo "HTTP $STATUS"
+          echo "$BODY" | python3 -m json.tool
+
+          if [ "$STATUS" != "200" ]; then
+            echo "::error::ERPNext returned HTTP $STATUS"
+            exit 1
+          fi
+
+          NAME=$(echo "$BODY" | python3 -c "import sys,json; print(json.load(sys.stdin)['data']['name'])")
+          echo "::notice::Purchase Order created: $NAME"

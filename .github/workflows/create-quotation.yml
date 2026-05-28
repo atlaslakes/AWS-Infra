@@ -1,0 +1,76 @@
+name: Create ERPNext Quotation
+
+on:
+  workflow_dispatch:
+    inputs:
+      quotation_to:
+        description: Quote to a Customer or Lead
+        required: true
+        default: Customer
+        type: choice
+        options:
+          - Customer
+          - Lead
+      party_name:
+        description: Customer or Lead name (must exist in ERPNext)
+        required: true
+      item_code:
+        description: Item code (must exist in ERPNext)
+        required: true
+      qty:
+        description: Quantity
+        required: false
+        default: "1"
+      rate:
+        description: Unit rate (price)
+        required: true
+      valid_till:
+        description: Valid till date (YYYY-MM-DD, defaults to 30 days from today)
+        required: false
+
+jobs:
+  create-quotation:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create quotation via ERPNext API
+        run: |
+          VALID_TILL="${{ inputs.valid_till }}"
+          if [ -z "$VALID_TILL" ]; then
+            VALID_TILL=$(python3 -c "from datetime import date, timedelta; print(date.today() + timedelta(days=30))")
+          fi
+
+          PAYLOAD=$(python3 -c "
+          import json
+          d = {
+            'quotation_to':    '${{ inputs.quotation_to }}',
+            'party_name':      '${{ inputs.party_name }}',
+            'transaction_date':'$(date +%Y-%m-%d)',
+            'valid_till':      '$VALID_TILL',
+            'items': [{
+              'item_code': '${{ inputs.item_code }}',
+              'qty':       ${{ inputs.qty }},
+              'rate':      ${{ inputs.rate }}
+            }]
+          }
+          print(json.dumps(d))
+          ")
+
+          RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
+            "${{ vars.ERPNEXT_URL }}/api/resource/Quotation" \
+            -H "Authorization: token ${{ secrets.ERPNEXT_API_KEY }}:${{ secrets.ERPNEXT_API_SECRET }}" \
+            -H "Content-Type: application/json" \
+            -d "$PAYLOAD")
+
+          BODY=$(echo "$RESPONSE" | head -n -1)
+          STATUS=$(echo "$RESPONSE" | tail -n 1)
+
+          echo "HTTP $STATUS"
+          echo "$BODY" | python3 -m json.tool
+
+          if [ "$STATUS" != "200" ]; then
+            echo "::error::ERPNext returned HTTP $STATUS"
+            exit 1
+          fi
+
+          NAME=$(echo "$BODY" | python3 -c "import sys,json; print(json.load(sys.stdin)['data']['name'])")
+          echo "::notice::Quotation created: $NAME"
