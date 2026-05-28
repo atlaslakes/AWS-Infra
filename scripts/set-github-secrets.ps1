@@ -4,7 +4,7 @@
 # Usage: .\set-github-secrets.ps1
 
 $repo  = "atlaslakes/AWS-Infra"
-$env_file = "$PSScriptRoot\.env"
+$env_file = "$PSScriptRoot\..\.env"
 
 if (-not (Test-Path $env_file)) {
     Write-Error ".env file not found at $env_file"

@@ -1,5 +1,5 @@
 param(
-    [string]$EnvFile = "erpnext-poc.env"
+    [string]$EnvFile = "configuration/erpnext-poc.env"
 )
 
 Set-StrictMode -Version Latest

@@ -6,7 +6,7 @@ on:
       - main
       - deployement-plan
     paths:
-      - 'erpnext-poc.yaml'        # only run when the CF template changes
+      - 'cloudformation/erpnext-poc.yaml'   # only run when the CF template changes
   workflow_dispatch:               # allow manual trigger from GitHub UI
     inputs:
       action:
@@ -25,7 +25,7 @@ permissions:
 env:
   AWS_REGION: us-east-1
   STACK_NAME: erpnext-poc
-  TEMPLATE_FILE: erpnext-poc.yaml
+  TEMPLATE_FILE: cloudformation/erpnext-poc.yaml
 
 jobs:
   deploy:
