@@ -54,6 +54,14 @@ Resources:
             Version: '2012-10-17'
             Statement:
 
+              # CloudFormation — account-level actions (no specific stack ARN)
+              - Sid: CloudFormationGlobal
+                Effect: Allow
+                Action:
+                  - cloudformation:ValidateTemplate
+                  - cloudformation:ListStacks
+                Resource: "*"
+
               # CloudFormation — full control over the erpnext-poc stack
               - Sid: CloudFormation
                 Effect: Allow
@@ -65,8 +73,6 @@ Resources:
                   - cloudformation:DescribeStackEvents
                   - cloudformation:DescribeStackResources
                   - cloudformation:GetTemplate
-                  - cloudformation:ValidateTemplate
-                  - cloudformation:ListStacks
                   - cloudformation:ListStackResources
                 Resource: !Sub arn:aws:cloudformation:*:${AWS::AccountId}:stack/erpnext-poc/*
 
