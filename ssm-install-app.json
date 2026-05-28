@@ -1,0 +1,9 @@
+{
+  "DocumentName": "AWS-RunShellScript",
+  "InstanceIds": ["i-0be6845d8493d077a"],
+  "Parameters": {
+    "commands": [
+      "docker exec frappe_docker-backend-1 sh -lc 'bench --site frontend install-app erpnext && bench --site frontend migrate'"
+    ]
+  }
+}

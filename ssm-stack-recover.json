@@ -1,0 +1,15 @@
+{
+  "DocumentName": "AWS-RunShellScript",
+  "InstanceIds": ["i-0be6845d8493d077a"],
+  "Parameters": {
+    "commands": [
+      "set -euxo pipefail",
+      "cd /opt/erpnext/frappe_docker",
+      "docker-compose -f pwd.yml -f compose.public.yml up -d",
+      "sleep 8",
+      "docker-compose -f pwd.yml -f compose.public.yml ps",
+      "docker ps --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}'",
+      "curl -sS -m 10 -I http://127.0.0.1"
+    ]
+  }
+}

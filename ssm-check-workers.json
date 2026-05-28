@@ -1,0 +1,19 @@
+{
+  "InstanceIds": ["i-0be6845d8493d077a"],
+  "DocumentName": "AWS-RunShellScript",
+  "Parameters": {
+    "commands": [
+      "echo '=== Running containers ==='",
+      "docker ps --format 'table {{.Names}}\\t{{.Status}}\\t{{.Image}}'",
+      "echo ''",
+      "echo '=== queue-short Redis env ==='",
+      "docker exec frappe_docker-queue-short-1 env | grep -E 'REDIS|FRAPPE_REDIS'",
+      "echo ''",
+      "echo '=== queue-long Redis env ==='",
+      "docker exec frappe_docker-queue-long-1 env | grep -E 'REDIS|FRAPPE_REDIS'",
+      "echo ''",
+      "echo '=== Worker process inside queue-short ==='",
+      "docker exec frappe_docker-queue-short-1 ps aux | grep -E 'worker|rq|bench'"
+    ]
+  }
+}

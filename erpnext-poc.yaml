@@ -1,0 +1,528 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: ERPNext POC on AWS (EC2 + RDS MariaDB + ElastiCache Redis + S3) single-AZ deployment.
+
+Parameters:
+  KeyPairName:
+    Type: AWS::EC2::KeyPair::KeyName
+    Description: Existing EC2 key pair name for SSH access.
+
+  AllowedSSHCidr:
+    Type: String
+    Description: CIDR block allowed to SSH to EC2 (for example, 203.0.113.10/32).
+    Default: 0.0.0.0/0
+    AllowedPattern: ^(?:\d{1,3}\.){3}\d{1,3}/(?:[0-9]|[12][0-9]|3[0-2])$
+
+  ERPNextVersion:
+    Type: String
+    Description: ERPNext/Frappe Docker tag to use in bootstrap env.
+    Default: v15
+
+  DBPassword:
+    Type: String
+    Description: Password for the ERPNext MariaDB user in RDS.
+    NoEcho: true
+    MinLength: 12
+
+  DBRootPassword:
+    Type: String
+    Description: Root password value stored in Secrets Manager (RDS does not use root login directly).
+    NoEcho: true
+    MinLength: 12
+
+  AdminPassword:
+    Type: String
+    Description: ERPNext Administrator password stored in Secrets Manager.
+    NoEcho: true
+    MinLength: 12
+
+  InstanceType:
+    Type: String
+    Default: t3.micro
+    AllowedValues:
+      - t3.micro
+      - t3.medium
+      - t3.large
+    Description: EC2 instance type for ERPNext containers.
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: Access
+        Parameters:
+          - KeyPairName
+          - AllowedSSHCidr
+      - Label:
+          default: ERPNext
+        Parameters:
+          - ERPNextVersion
+          - AdminPassword
+      - Label:
+          default: Database
+        Parameters:
+          - DBPassword
+          - DBRootPassword
+      - Label:
+          default: Compute
+        Parameters:
+          - InstanceType
+
+Resources:
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-vpc
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-igw
+
+  VPCGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
+
+  PublicSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.1.0/24
+      MapPublicIpOnLaunch: true
+      AvailabilityZone: !Select [0, !GetAZs '']
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-public-a
+
+  PrivateSubnetA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.2.0/24
+      MapPublicIpOnLaunch: false
+      AvailabilityZone: !Select [0, !GetAZs '']
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-private-a
+
+  PrivateSubnetB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.3.0/24
+      MapPublicIpOnLaunch: false
+      AvailabilityZone: !Select [1, !GetAZs '']
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-private-b
+
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-public-rt
+
+  PublicDefaultRoute:
+    Type: AWS::EC2::Route
+    DependsOn: VPCGatewayAttachment
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  PublicSubnetRouteAssoc:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet
+      RouteTableId: !Ref PublicRouteTable
+
+  PrivateRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-private-rt
+
+  PrivateSubnetARouteAssoc:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnetA
+      RouteTableId: !Ref PrivateRouteTable
+
+  PrivateSubnetBRouteAssoc:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnetB
+      RouteTableId: !Ref PrivateRouteTable
+
+  EC2SecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Access to ERPNext EC2 host
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: !Ref AllowedSSHCidr
+          Description: SSH from allowed CIDR
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+          Description: HTTP
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+          Description: HTTPS
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-ec2-sg
+
+  RDSSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: MariaDB access from ERPNext EC2 only
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 3306
+          ToPort: 3306
+          SourceSecurityGroupId: !Ref EC2SecurityGroup
+          Description: MariaDB from EC2 SG
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-rds-sg
+
+  RedisSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Redis access from ERPNext EC2 only
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 6379
+          ToPort: 6379
+          SourceSecurityGroupId: !Ref EC2SecurityGroup
+          Description: Redis from EC2 SG
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-redis-sg
+
+  DBSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Description: ERPNext DB credentials (root + app user)
+      SecretString: !Sub |
+        {
+          "db_root_password": "${DBRootPassword}",
+          "db_password": "${DBPassword}"
+        }
+
+  AppSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Description: ERPNext app credentials
+      SecretString: !Sub |
+        {
+          "admin_password": "${AdminPassword}"
+        }
+
+  ERPNextBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      VersioningConfiguration:
+        Status: Suspended
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-erpnext-files
+
+  RDSSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: Subnet group for ERPNext MariaDB
+      SubnetIds:
+        - !Ref PrivateSubnetA
+        - !Ref PrivateSubnetB
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-rds-subnet-group
+
+  ERPNextDB:
+    Type: AWS::RDS::DBInstance
+    DeletionPolicy: Snapshot
+    UpdateReplacePolicy: Snapshot
+    Properties:
+      Engine: mariadb
+      EngineVersion: 10.6
+      DBInstanceClass: db.t3.micro
+      AllocatedStorage: '20'
+      StorageType: gp3
+      MasterUsername: erpnext
+      MasterUserPassword: !Ref DBPassword
+      DBName: erpnext
+      PubliclyAccessible: false
+      MultiAZ: false
+      BackupRetentionPeriod: 0
+      DeletionProtection: false
+      VPCSecurityGroups:
+        - !Ref RDSSecurityGroup
+      DBSubnetGroupName: !Ref RDSSubnetGroup
+      StorageEncrypted: true
+      CopyTagsToSnapshot: true
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-mariadb
+
+  RedisSubnetGroup:
+    Type: AWS::ElastiCache::SubnetGroup
+    Properties:
+      Description: Subnet group for ERPNext Redis clusters
+      SubnetIds:
+        - !Ref PrivateSubnetA
+        - !Ref PrivateSubnetB
+
+  ERPNextCacheCluster:
+    Type: AWS::ElastiCache::CacheCluster
+    Properties:
+      Engine: redis
+      EngineVersion: '7.0'
+      CacheNodeType: cache.t3.micro
+      NumCacheNodes: 1
+      Port: 6379
+      VpcSecurityGroupIds:
+        - !Ref RedisSecurityGroup
+      CacheSubnetGroupName: !Ref RedisSubnetGroup
+      PreferredAvailabilityZone: !Select [0, !GetAZs '']
+
+  ERPNextQueueCluster:
+    Type: AWS::ElastiCache::CacheCluster
+    Properties:
+      Engine: redis
+      EngineVersion: '7.0'
+      CacheNodeType: cache.t3.micro
+      NumCacheNodes: 1
+      Port: 6379
+      VpcSecurityGroupIds:
+        - !Ref RedisSecurityGroup
+      CacheSubnetGroupName: !Ref RedisSubnetGroup
+      PreferredAvailabilityZone: !Select [0, !GetAZs '']
+
+  EC2Role:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+      Policies:
+        - PolicyName: ERPNextPOCAccessPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - secretsmanager:GetSecretValue
+                Resource:
+                  - !Ref DBSecret
+                  - !Ref AppSecret
+              - Effect: Allow
+                Action:
+                  - s3:ListBucket
+                Resource:
+                  - !GetAtt ERPNextBucket.Arn
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                  - s3:DeleteObject
+                Resource:
+                  - !Sub ${ERPNextBucket.Arn}/*
+
+  EC2InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles:
+        - !Ref EC2Role
+
+  ERPNextInstance:
+    Type: AWS::EC2::Instance
+    DependsOn:
+      - ERPNextDB
+      - ERPNextCacheCluster
+      - ERPNextQueueCluster
+    Properties:
+      InstanceType: !Ref InstanceType
+      IamInstanceProfile: !Ref EC2InstanceProfile
+      KeyName: !Ref KeyPairName
+      ImageId: '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64}}'
+      SubnetId: !Ref PublicSubnet
+      SecurityGroupIds:
+        - !Ref EC2SecurityGroup
+      BlockDeviceMappings:
+        - DeviceName: /dev/xvda
+          Ebs:
+            VolumeSize: 30
+            VolumeType: gp3
+            DeleteOnTermination: true
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-erpnext-ec2
+      UserData:
+        Fn::Base64:
+          Fn::Sub: |
+            #!/bin/bash
+            set -euxo pipefail
+
+            dnf update -y
+            dnf install -y docker git jq awscli curl
+            systemctl enable docker
+            systemctl start docker
+            usermod -aG docker ec2-user
+
+            # Amazon Linux images may not ship docker compose plugin by default.
+            if ! docker compose version >/dev/null 2>&1; then
+              curl -L https://github.com/docker/compose/releases/download/v2.29.2/docker-compose-linux-x86_64 -o /usr/local/bin/docker-compose
+              chmod +x /usr/local/bin/docker-compose
+            fi
+
+            mkdir -p /opt/erpnext
+            cd /opt/erpnext
+
+            DB_SECRET_ID='${DBSecret}'
+            APP_SECRET_ID='${AppSecret}'
+            RDS_HOST='${ERPNextDB.Endpoint.Address}'
+            REDIS_CACHE_HOST='${ERPNextCacheCluster.RedisEndpoint.Address}'
+            REDIS_QUEUE_HOST='${ERPNextQueueCluster.RedisEndpoint.Address}'
+            S3_BUCKET='${ERPNextBucket}'
+            ERP_VERSION='${ERPNextVersion}'
+
+            DB_SECRET_JSON=$(aws secretsmanager get-secret-value --secret-id "$DB_SECRET_ID" --query SecretString --output text)
+            APP_SECRET_JSON=$(aws secretsmanager get-secret-value --secret-id "$APP_SECRET_ID" --query SecretString --output text)
+
+            DB_PASSWORD=$(echo "$DB_SECRET_JSON" | jq -r '.db_password')
+            DB_ROOT_PASSWORD=$(echo "$DB_SECRET_JSON" | jq -r '.db_root_password')
+            ADMIN_PASSWORD=$(echo "$APP_SECRET_JSON" | jq -r '.admin_password')
+
+            git clone --depth 1 https://github.com/frappe/frappe_docker.git
+            cd frappe_docker
+
+            cat > .env <<EOF
+            DB_HOST=$RDS_HOST
+            DB_PORT=3306
+            DB_PASSWORD=$DB_PASSWORD
+            DB_ROOT_PASSWORD=$DB_ROOT_PASSWORD
+            REDIS_CACHE=$REDIS_CACHE_HOST:6379
+            REDIS_QUEUE=$REDIS_QUEUE_HOST:6379
+            REDIS_SOCKETIO=$REDIS_QUEUE_HOST:6379
+            ERPNEXT_VERSION=$ERP_VERSION
+            ADMIN_PASSWORD=$ADMIN_PASSWORD
+            BACKUP_S3_BUCKET=$S3_BUCKET
+            EOF
+
+            for attempt in $(seq 1 30); do
+              if (echo >/dev/tcp/$RDS_HOST/3306) >/dev/null 2>&1; then
+                echo "RDS endpoint $RDS_HOST is reachable on 3306"
+                break
+              fi
+              echo "Waiting for RDS endpoint $RDS_HOST on 3306 (attempt $attempt/30)"
+              sleep 5
+            done
+
+            if ! (echo >/dev/tcp/$RDS_HOST/3306) >/dev/null 2>&1; then
+              echo "RDS endpoint $RDS_HOST is not reachable on 3306" >&2
+              exit 1
+            fi
+
+            cat > compose.public.yml <<EOF
+            services:
+              frontend:
+                ports:
+                  - "80:8080"
+            EOF
+
+            COMPOSE_FILE=""
+            if [[ -f pwd.yml ]]; then
+              COMPOSE_FILE="pwd.yml"
+            elif [[ -f compose.yaml ]]; then
+              COMPOSE_FILE="compose.yaml"
+            elif [[ -f docker-compose.yml ]]; then
+              COMPOSE_FILE="docker-compose.yml"
+            fi
+
+            if [[ -n "$COMPOSE_FILE" ]]; then
+              if docker compose version >/dev/null 2>&1; then
+                docker compose -f "$COMPOSE_FILE" -f compose.public.yml up -d || true
+              else
+                /usr/local/bin/docker-compose -f "$COMPOSE_FILE" -f compose.public.yml up -d || true
+              fi
+            fi
+
+            echo "Bootstrap completed at $(date -u)" | tee -a /var/log/erpnext-bootstrap.log
+
+  ERPNextEIP:
+    Type: AWS::EC2::EIP
+    DependsOn: VPCGatewayAttachment
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-erpnext-eip
+
+  ERPNextEIPAssociation:
+    Type: AWS::EC2::EIPAssociation
+    Properties:
+      AllocationId: !GetAtt ERPNextEIP.AllocationId
+      InstanceId: !Ref ERPNextInstance
+
+Outputs:
+  ERPNextURL:
+    Description: ERPNext URL over HTTP
+    Value: !Sub http://${ERPNextEIP}
+
+  EC2PublicIP:
+    Description: Public IPv4 address of the ERPNext host
+    Value: !Ref ERPNextEIP
+
+  RDSEndpoint:
+    Description: RDS MariaDB endpoint
+    Value: !GetAtt ERPNextDB.Endpoint.Address
+
+  SSHCommand:
+    Description: SSH command to connect to EC2
+    Value: !Sub ssh -i <path-to-private-key> ec2-user@${ERPNextEIP}

@@ -1,0 +1,11 @@
+{
+  "DocumentName": "AWS-RunShellScript",
+  "InstanceIds": ["i-0be6845d8493d077a"],
+  "Parameters": {
+    "commands": [
+      "docker inspect -f '{{.State.Status}} {{.State.ExitCode}} {{.State.OOMKilled}}' frappe_docker-create-site-1",
+      "dmesg | tail -n 120 | grep -i -E 'killed process|out of memory|oom' || true",
+      "free -h"
+    ]
+  }
+}

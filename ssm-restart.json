@@ -1,0 +1,10 @@
+{
+  "DocumentName": "AWS-RunShellScript",
+  "InstanceIds": ["i-0be6845d8493d077a"],
+  "Parameters": {
+    "commands": [
+      "cat > /opt/erpnext/frappe_docker/compose.public.yml <<'EOF'\nservices:\n  frontend:\n    ports:\n      - \"80:8080\"\nEOF",
+      "cd /opt/erpnext/frappe_docker && /usr/local/bin/docker-compose -f pwd.yml -f compose.public.yml up -d"
+    ]
+  }
+}

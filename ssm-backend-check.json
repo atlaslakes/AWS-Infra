@@ -1,0 +1,10 @@
+{
+  "DocumentName": "AWS-RunShellScript",
+  "InstanceIds": ["i-0be6845d8493d077a"],
+  "Parameters": {
+    "commands": [
+      "docker logs --tail 160 frappe_docker-backend-1",
+      "docker exec frappe_docker-backend-1 cat /home/frappe/frappe-bench/sites/common_site_config.json"
+    ]
+  }
+}

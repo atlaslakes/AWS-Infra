@@ -1,0 +1,26 @@
+{
+  "DocumentName": "AWS-RunShellScript",
+  "InstanceIds": ["i-0be6845d8493d077a"],
+  "Parameters": {
+    "commands": [
+      "echo '=== Push existing backup files to S3 from host ==='",
+      "BACKUP_DIR=/var/lib/docker/volumes/frappe_docker_sites/_data/frontend/private/backups",
+      "aws s3 cp $BACKUP_DIR/ s3://erpnext-poc-erpnextbucket-780m8mqa8l0v/backups/frontend/ --recursive --region us-east-1",
+      "echo 'Backup files pushed to S3'",
+
+      "echo ''",
+      "echo '=== Test boto3/S3 access from inside backend container ==='",
+      "docker exec frappe_docker-backend-1 python3 -c \"import boto3; s3=boto3.client('s3',region_name='us-east-1'); r=s3.list_objects_v2(Bucket='erpnext-poc-erpnextbucket-780m8mqa8l0v',MaxKeys=5); print('S3 accessible, object count:', r.get('KeyCount',0))\" 2>&1 || echo 'S3 access test failed'",
+
+      "echo ''",
+      "echo '=== Configure automated scheduled backup to push to S3 via host cron ==='",
+      "echo '0 2 * * * root aws s3 sync /var/lib/docker/volumes/frappe_docker_sites/_data/frontend/private/backups/ s3://erpnext-poc-erpnextbucket-780m8mqa8l0v/backups/frontend/ --region us-east-1 --delete' > /etc/cron.d/erpnext-s3-backup",
+      "chmod 644 /etc/cron.d/erpnext-s3-backup",
+      "echo 'Cron job created for nightly S3 backup sync at 2am UTC'",
+
+      "echo ''",
+      "echo '=== List S3 bucket after push ==='",
+      "aws s3 ls s3://erpnext-poc-erpnextbucket-780m8mqa8l0v/ --recursive --region us-east-1"
+    ]
+  }
+}

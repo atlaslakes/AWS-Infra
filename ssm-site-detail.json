@@ -1,0 +1,9 @@
+{
+  "DocumentName": "AWS-RunShellScript",
+  "InstanceIds": ["i-0be6845d8493d077a"],
+  "Parameters": {
+    "commands": [
+      "docker exec frappe_docker-backend-1 sh -lc 'ls -la /home/frappe/frappe-bench/sites/frontend && echo --- && cat /home/frappe/frappe-bench/sites/frontend/site_config.json 2>/dev/null || true && echo --- && cat /home/frappe/frappe-bench/sites/frontend/apps.txt 2>/dev/null || true'"
+    ]
+  }
+}

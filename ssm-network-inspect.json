@@ -1,0 +1,19 @@
+{
+  "DocumentName": "AWS-RunShellScript",
+  "InstanceIds": ["i-0be6845d8493d077a"],
+  "Parameters": {
+    "commands": [
+      "set -euxo pipefail",
+      "docker network ls",
+      "docker inspect -f '{{json .NetworkSettings.Networks}}' frappe_docker-redis-queue-1",
+      "docker inspect -f '{{json .NetworkSettings.Networks}}' frappe_docker-redis-cache-1",
+      "docker inspect -f '{{json .NetworkSettings.Networks}}' frappe_docker-backend-1",
+      "docker inspect -f '{{json .NetworkSettings.Networks}}' frappe_docker-websocket-1",
+      "docker inspect -f '{{json .NetworkSettings.Networks}}' frappe_docker-queue-short-1",
+      "docker inspect -f '{{json .NetworkSettings.Networks}}' frappe_docker-frontend-1",
+      "docker exec frappe_docker-backend-1 getent hosts redis-queue || true",
+      "docker exec frappe_docker-websocket-1 getent hosts redis-queue || true",
+      "docker exec frappe_docker-frontend-1 getent hosts backend || true"
+    ]
+  }
+}

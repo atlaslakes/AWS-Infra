@@ -1,0 +1,31 @@
+{
+  "DocumentName": "AWS-RunShellScript",
+  "InstanceIds": ["i-0be6845d8493d077a"],
+  "Parameters": {
+    "commands": [
+      "set -euxo pipefail",
+      "cd /opt/erpnext/frappe_docker",
+
+      "echo '=== PHASE 1: Tear down current stack and wipe local volumes ==='",
+      "docker-compose -f pwd.yml -f compose.public.yml down -v || true",
+
+      "echo '=== PHASE 2: Download new managed compose file from S3 ==='",
+      "aws s3 cp s3://erpnext-poc-erpnextbucket-780m8mqa8l0v/config/pwd-managed.yml /opt/erpnext/frappe_docker/pwd.yml --region us-east-1",
+      "echo 'New pwd.yml written:'",
+      "head -5 /opt/erpnext/frappe_docker/pwd.yml",
+
+      "echo '=== PHASE 3: Verify RDS reachability from host ==='",
+      "timeout 10 bash -c 'until echo > /dev/tcp/erpnext-poc-erpnextdb-ooorv168mrw1.c2diyosis802.us-east-1.rds.amazonaws.com/3306; do sleep 2; done' && echo 'RDS reachable' || echo 'WARNING: RDS not reachable from host'",
+
+      "echo '=== PHASE 4: Start managed stack ==='",
+      "docker-compose -f pwd.yml -f compose.public.yml up -d",
+
+      "echo '=== PHASE 5: Initial status check ==='",
+      "sleep 10",
+      "docker-compose -f pwd.yml -f compose.public.yml ps",
+
+      "echo '=== Migration started. create-site and configurator are running in background. ==='",
+      "echo 'Check status in 3-5 minutes with ssm-check-migration.json'"
+    ]
+  }
+}

@@ -1,0 +1,28 @@
+{
+  "DocumentName": "AWS-RunShellScript",
+  "InstanceIds": ["i-0be6845d8493d077a"],
+  "Parameters": {
+    "commands": [
+      "cd /opt/erpnext/frappe_docker",
+
+      "echo '=== CONTAINER STATUS ==='",
+      "docker-compose -f pwd.yml -f compose.public.yml ps",
+
+      "echo ''",
+      "echo '=== create-site LOGS (last 40 lines) ==='",
+      "docker-compose -f pwd.yml -f compose.public.yml logs --tail=40 create-site 2>&1 || echo '(create-site not running)'",
+
+      "echo ''",
+      "echo '=== configurator LOGS (last 20 lines) ==='",
+      "docker-compose -f pwd.yml -f compose.public.yml logs --tail=20 configurator 2>&1 || echo '(configurator not running)'",
+
+      "echo ''",
+      "echo '=== common_site_config.json ==='",
+      "cat /var/lib/docker/volumes/frappe_docker_sites/_data/common_site_config.json 2>/dev/null || echo '(not yet created)'",
+
+      "echo ''",
+      "echo '=== HTTP check ==='",
+      "curl -s -o /dev/null -w '%{http_code}' http://localhost:80 || echo 'not responding'"
+    ]
+  }
+}

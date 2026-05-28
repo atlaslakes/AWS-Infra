@@ -1,0 +1,11 @@
+{
+  "DocumentName": "AWS-RunShellScript",
+  "InstanceIds": ["i-0be6845d8493d077a"],
+  "Parameters": {
+    "commands": [
+      "cd /opt/erpnext/frappe_docker && grep -n 'image: mariadb' pwd.yml",
+      "docker ps -a --filter name=frappe_docker-db-1 --filter name=frappe_docker-create-site-1",
+      "ss -lntp | grep ':80 ' || true"
+    ]
+  }
+}

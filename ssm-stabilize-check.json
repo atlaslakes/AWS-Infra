@@ -1,0 +1,17 @@
+{
+  "DocumentName": "AWS-RunShellScript",
+  "InstanceIds": ["i-0be6845d8493d077a"],
+  "Parameters": {
+    "commands": [
+      "set -euxo pipefail",
+      "cd /opt/erpnext/frappe_docker",
+      "docker-compose -f pwd.yml -f compose.public.yml ps",
+      "docker logs --tail 80 frappe_docker-frontend-1 || true",
+      "docker logs --tail 80 frappe_docker-websocket-1 || true",
+      "docker logs --tail 80 frappe_docker-queue-short-1 || true",
+      "docker logs --tail 80 frappe_docker-queue-long-1 || true",
+      "docker logs --tail 80 frappe_docker-backend-1 || true",
+      "ss -lntp | grep -E ':80 |:8000 |:9000 ' || true"
+    ]
+  }
+}

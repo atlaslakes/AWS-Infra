@@ -1,0 +1,12 @@
+{
+  "DocumentName": "AWS-RunShellScript",
+  "InstanceIds": ["i-0be6845d8493d077a"],
+  "Parameters": {
+    "commands": [
+      "sudo systemctl restart sshd",
+      "sudo systemctl is-active sshd",
+      "sudo ss -lntp | grep ':22 ' || true",
+      "sudo tail -n 60 /var/log/secure || sudo journalctl -u sshd -n 60 --no-pager"
+    ]
+  }
+}

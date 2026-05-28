@@ -1,0 +1,19 @@
+{
+  "DocumentName": "AWS-RunShellScript",
+  "InstanceIds": ["i-0be6845d8493d077a"],
+  "Parameters": {
+    "commands": [
+      "echo '=== DIRECTORY: /opt/erpnext/frappe_docker/ ==='",
+      "ls -lah /opt/erpnext/frappe_docker/",
+      "echo ''",
+      "echo '=== RUNNING CONTAINERS ==='",
+      "docker ps --format 'table {{.Names}}\t{{.Image}}\t{{.Status}}\t{{.Ports}}'",
+      "echo ''",
+      "echo '=== DOCKER VOLUMES ==='",
+      "docker volume ls",
+      "echo ''",
+      "echo '=== DOCKER NETWORKS ==='",
+      "docker network ls"
+    ]
+  }
+}

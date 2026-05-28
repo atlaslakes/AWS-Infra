@@ -1,0 +1,24 @@
+{
+  "DocumentName": "AWS-RunShellScript",
+  "InstanceIds": ["i-0be6845d8493d077a"],
+  "Parameters": {
+    "commands": [
+      "echo '=== Confirm site config uses RDS ==='",
+      "cat /var/lib/docker/volumes/frappe_docker_sites/_data/common_site_config.json",
+
+      "echo ''",
+      "echo '=== Configure S3 backups on ERPNext site ==='",
+      "docker exec frappe_docker-backend-1 bench --site frontend set-config aws_bucket erpnext-poc-erpnextbucket-780m8mqa8l0v",
+      "docker exec frappe_docker-backend-1 bench --site frontend set-config region_name us-east-1",
+      "docker exec frappe_docker-backend-1 bench --site frontend set-config push_to_s3 1",
+
+      "echo ''",
+      "echo '=== Trigger a test backup to S3 ==='",
+      "docker exec frappe_docker-backend-1 bench --site frontend backup --with-files 2>&1 || echo 'Backup command completed (check S3 for result)'",
+
+      "echo ''",
+      "echo '=== Verify site_config.json has S3 settings ==='",
+      "cat /var/lib/docker/volumes/frappe_docker_sites/_data/frontend/site_config.json | python3 -c \"import sys,json; c=json.load(sys.stdin); print('db_host:', c.get('db_host','MISSING')); print('aws_bucket:', c.get('aws_bucket','MISSING')); print('push_to_s3:', c.get('push_to_s3','MISSING'))\""
+    ]
+  }
+}

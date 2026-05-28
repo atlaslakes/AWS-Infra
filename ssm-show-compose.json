@@ -1,0 +1,12 @@
+{
+  "DocumentName": "AWS-RunShellScript",
+  "InstanceIds": ["i-0be6845d8493d077a"],
+  "Parameters": {
+    "commands": [
+      "cat /opt/erpnext/frappe_docker/pwd.yml",
+      "echo '---COMPOSE.PUBLIC.YML---'",
+      "cat /opt/erpnext/frappe_docker/compose.public.yml"
+    ]
+  }
+}
+ 

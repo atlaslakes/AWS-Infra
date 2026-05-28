@@ -1,0 +1,11 @@
+{
+  "DocumentName": "AWS-RunShellScript",
+  "InstanceIds": ["i-0be6845d8493d077a"],
+  "Parameters": {
+    "commands": [
+      "docker exec frappe_docker-backend-1 bash -lc 'ps -ef | grep -E \"bench|python\" | grep -v grep | head -n 30'",
+      "docker logs --tail 80 frappe_docker-backend-1",
+      "docker exec frappe_docker-backend-1 bash -lc 'ls -la /home/frappe/frappe-bench/sites/frontend 2>/dev/null || true'"
+    ]
+  }
+}

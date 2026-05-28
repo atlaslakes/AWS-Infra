@@ -1,0 +1,12 @@
+{
+  "DocumentName": "AWS-RunShellScript",
+  "InstanceIds": ["i-0be6845d8493d077a"],
+  "Parameters": {
+    "commands": [
+      "set -euxo pipefail",
+      "docker ps --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}'",
+      "curl -sS -m 10 -I http://127.0.0.1",
+      "curl -sS -m 10 http://127.0.0.1 | head -n 5"
+    ]
+  }
+}

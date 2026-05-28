@@ -2,6 +2,9 @@
 .env
 .env.*
 !.env.example
+erpnext-poc.env
+erpnext-poc.env.*
+!erpnext-poc.env.example
 
 # AWS CLI config (contains credentials)
 .aws/

@@ -1,0 +1,10 @@
+{
+  "DocumentName": "AWS-RunShellScript",
+  "InstanceIds": ["i-0be6845d8493d077a"],
+  "Parameters": {
+    "commands": [
+      "sudo systemctl restart sshd",
+      "sudo systemctl status sshd --no-pager -l | head -n 20"
+    ]
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "DocumentName": "AWS-RunShellScript",
+  "InstanceIds": ["i-0be6845d8493d077a"],
+  "Parameters": {
+    "commands": [
+      "echo '=== .env ==='",
+      "cat /opt/erpnext/frappe_docker/.env",
+      "echo ''",
+      "echo '=== pwd.yml ==='",
+      "cat /opt/erpnext/frappe_docker/pwd.yml"
+    ]
+  }
+}

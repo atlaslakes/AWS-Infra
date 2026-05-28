@@ -1,0 +1,7 @@
+{
+  "DocumentName": "AWS-RunShellScript",
+  "InstanceIds": ["i-0be6845d8493d077a"],
+  "Parameters": {
+    "commands": ["echo SSM_OK", "hostname"]
+  }
+}

@@ -7,14 +7,14 @@
 
 ## Decisions Confirmed
 
-| Decision | Value |
-|----------|-------|
+| Decision         | Value                                                 |
+| ---------------- | ----------------------------------------------------- |
 | Deployment model | EC2 running `frappe/frappe_docker` (Docker Compose) |
-| Availability | Single AZ — POC only, no high availability |
-| Database | Amazon RDS for MariaDB (single-AZ) |
-| Cache / Queue | Amazon ElastiCache (Redis, single-node) |
-| Multi-AZ | ❌ Not for POC |
-| Estimated cost | ~$120/mo |
+| Availability     | Single AZ — POC only, no high availability           |
+| Database         | Amazon RDS for MariaDB (single-AZ)                    |
+| Cache / Queue    | Amazon ElastiCache (Redis, single-node)               |
+| Multi-AZ         | ❌ Not for POC                                        |
+| Estimated cost   | ~$120/mo                                              |
 
 ---
 
@@ -24,23 +24,23 @@
 
 ### Container Services (all run on the single EC2 host)
 
-| Container | Role |
-|-----------|------|
-| `backend` | Gunicorn app server (Werkzeug) |
-| `frontend` | Nginx — serves static assets, proxies to backend + websocket |
-| `websocket` | Node.js Socket.IO for real-time updates |
-| `queue-short` | RQ worker — short background jobs |
-| `queue-long` | RQ worker — long background jobs |
-| `scheduler` | Frappe cron scheduler |
+| Container        | Role                                                          |
+| ---------------- | ------------------------------------------------------------- |
+| `backend`      | Gunicorn app server (Werkzeug)                                |
+| `frontend`     | Nginx — serves static assets, proxies to backend + websocket |
+| `websocket`    | Node.js Socket.IO for real-time updates                       |
+| `queue-short`  | RQ worker — short background jobs                            |
+| `queue-long`   | RQ worker — long background jobs                             |
+| `scheduler`    | Frappe cron scheduler                                         |
 | `configurator` | One-shot init container — writes `common_site_config.json` |
 
 ### External AWS Managed Services
 
-| Service | Purpose |
-|---------|---------|
-| RDS MariaDB | Replaces the `db` container |
+| Service                      | Purpose                                               |
+| ---------------------------- | ----------------------------------------------------- |
+| RDS MariaDB                  | Replaces the `db` container                         |
 | ElastiCache Redis (x2 nodes) | Replaces `redis-cache` + `redis-queue` containers |
-| S3 | Backups and file attachments |
+| S3                           | Backups and file attachments                          |
 
 ---
 
@@ -79,42 +79,42 @@ Internet
 
 ### VPC & Networking
 
-| Resource | Value |
-|----------|-------|
-| VPC CIDR | `10.0.0.0/16` |
-| Public subnet (EC2) | `10.0.1.0/24` — single AZ |
-| Private subnet (RDS + Redis) | `10.0.2.0/24` — same AZ |
-| Internet Gateway | 1x |
-| NAT Gateway | ❌ Not needed (EC2 is in public subnet with outbound via IGW) |
+| Resource                     | Value                                                         |
+| ---------------------------- | ------------------------------------------------------------- |
+| VPC CIDR                     | `10.0.0.0/16`                                               |
+| Public subnet (EC2)          | `10.0.1.0/24` — single AZ                                  |
+| Private subnet (RDS + Redis) | `10.0.2.0/24` — same AZ                                    |
+| Internet Gateway             | 1x                                                            |
+| NAT Gateway                  | ❌ Not needed (EC2 is in public subnet with outbound via IGW) |
 
 ### EC2 Instance
 
-| Property | Value |
-|----------|-------|
-| Instance type | `t3.medium` (2 vCPU, 4 GB RAM) |
-| AMI | Amazon Linux 2023 (latest) |
-| Storage | 30 GB gp3 root volume |
-| Key pair | Parameter — user supplies at deploy time |
-| Elastic IP | 1x (stable public IP for DNS) |
-| UserData | Installs Docker, Docker Compose, clones `frappe_docker`, sets env vars, starts stack |
+| Property      | Value                                                                                  |
+| ------------- | -------------------------------------------------------------------------------------- |
+| Instance type | `t3.medium` (2 vCPU, 4 GB RAM)                                                       |
+| AMI           | Amazon Linux 2023 (latest)                                                             |
+| Storage       | 30 GB gp3 root volume                                                                  |
+| Key pair      | Parameter — user supplies at deploy time                                              |
+| Elastic IP    | 1x (stable public IP for DNS)                                                          |
+| UserData      | Installs Docker, Docker Compose, clones `frappe_docker`, sets env vars, starts stack |
 
 ### RDS (MariaDB)
 
-| Property | Value |
-|----------|-------|
-| Engine | MariaDB 10.6 |
-| Instance class | `db.t3.micro` |
-| Storage | 20 GB gp3 |
-| Multi-AZ | No |
+| Property            | Value                    |
+| ------------------- | ------------------------ |
+| Engine              | MariaDB 10.6             |
+| Instance class      | `db.t3.micro`          |
+| Storage             | 20 GB gp3                |
+| Multi-AZ            | No                       |
 | Publicly accessible | No (private subnet only) |
-| Backup retention | 3 days |
-| Deletion protection | No (POC) |
+| Backup retention    | 3 days                   |
+| Deletion protection | No (POC)                 |
 
 ### ElastiCache (Redis)
 
-| Cluster | Instance | Purpose |
-|---------|----------|---------|
-| `erpnext-cache` | `cache.t3.micro` | Frappe session / document cache |
+| Cluster           | Instance           | Purpose                          |
+| ----------------- | ------------------ | -------------------------------- |
+| `erpnext-cache` | `cache.t3.micro` | Frappe session / document cache  |
 | `erpnext-queue` | `cache.t3.micro` | RQ job queue + Socket.IO pub/sub |
 
 - Engine: Redis 7.x
@@ -123,29 +123,29 @@ Internet
 
 ### S3
 
-| Property | Value |
-|----------|-------|
-| Purpose | ERPNext site backups + file attachments |
-| Encryption | SSE-S3 |
-| Versioning | Disabled (POC) |
-| Public access | Blocked |
+| Property      | Value                                   |
+| ------------- | --------------------------------------- |
+| Purpose       | ERPNext site backups + file attachments |
+| Encryption    | SSE-S3                                  |
+| Versioning    | Disabled (POC)                          |
+| Public access | Blocked                                 |
 
 ### Security Groups
 
-| SG | Inbound Rules |
-|----|--------------|
-| `ec2-sg` | TCP 22 (SSH) from deployer IP; TCP 80 + 443 from 0.0.0.0/0 |
-| `rds-sg` | TCP 3306 from `ec2-sg` only |
-| `redis-sg` | TCP 6379 from `ec2-sg` only |
+| SG           | Inbound Rules                                              |
+| ------------ | ---------------------------------------------------------- |
+| `ec2-sg`   | TCP 22 (SSH) from deployer IP; TCP 80 + 443 from 0.0.0.0/0 |
+| `rds-sg`   | TCP 3306 from `ec2-sg` only                              |
+| `redis-sg` | TCP 6379 from `ec2-sg` only                              |
 
 ### Secrets Manager
 
 Two secrets created by the stack:
 
-| Secret | Contents |
-|--------|---------|
-| `erpnext/poc/db` | `db_root_password`, `db_password` |
-| `erpnext/poc/app` | `admin_password` |
+| Secret              | Contents                              |
+| ------------------- | ------------------------------------- |
+| `erpnext/poc/db`  | `db_root_password`, `db_password` |
+| `erpnext/poc/app` | `admin_password`                    |
 
 The EC2 UserData script reads these at boot via AWS CLI before starting Docker Compose.
 
@@ -156,7 +156,7 @@ The EC2 UserData script reads these at boot via AWS CLI before starting Docker C
 Single flat template (no nested stacks — keeps the POC simple):
 
 ```
-erpnext-poc.yaml
+erpnext-poc.yaml 
 │
 ├── Parameters
 │   ├── KeyPairName          — EC2 SSH key
@@ -194,15 +194,15 @@ erpnext-poc.yaml
 
 ## Estimated Monthly Cost (POC, us-east-1)
 
-| Resource | Est. Cost/mo |
-|----------|-------------|
-| EC2 t3.medium | ~$30 |
-| RDS db.t3.micro MariaDB | ~$15 |
-| ElastiCache 2x cache.t3.micro | ~$25 |
-| S3 (minimal usage) | ~$1 |
-| Elastic IP | ~$4 |
-| Data transfer | ~$5 |
-| **Total** | **~$80–120/mo** |
+| Resource                      | Est. Cost/mo           |
+| ----------------------------- | ---------------------- |
+| EC2 t3.medium                 | ~$30                   |
+| RDS db.t3.micro MariaDB       | ~$15                   |
+| ElastiCache 2x cache.t3.micro | ~$25                   |
+| S3 (minimal usage)            | ~$1                    |
+| Elastic IP                    | ~$4                    |
+| Data transfer                 | ~$5                    |
+| **Total**               | **~$80–120/mo** |
 
 ---
 

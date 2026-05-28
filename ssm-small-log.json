@@ -1,0 +1,9 @@
+{
+  "DocumentName": "AWS-RunShellScript",
+  "InstanceIds": ["i-0be6845d8493d077a"],
+  "Parameters": {
+    "commands": [
+      "docker logs --tail 120 frappe_docker-create-site-1"
+    ]
+  }
+}
