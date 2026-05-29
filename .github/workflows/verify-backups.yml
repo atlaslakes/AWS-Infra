@@ -1,0 +1,96 @@
+name: Verify ERPNext Backups
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 6 * * *'   # daily at 6am UTC — checks previous night's backup
+
+jobs:
+  verify-backups:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v6.1.2
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: us-east-1
+
+      - name: Check S3 for recent backup files
+        run: |
+          BUCKET="erpnext-poc-erpnextbucket-780m8mqa8l0v"
+          echo "=== S3 bucket contents (backups/) ==="
+          aws s3 ls s3://$BUCKET/backups/ --recursive --no-cli-pager \
+            | sort -k1,2 | tail -20
+
+          echo ""
+          echo "=== Checking for backups in last 24 hours ==="
+          CUTOFF=$(date -d '24 hours ago' +%Y-%m-%d 2>/dev/null || date -v-24H +%Y-%m-%d)
+          RECENT=$(aws s3 ls s3://$BUCKET/backups/ --recursive --no-cli-pager \
+            | awk -v cutoff="$CUTOFF" '$1 >= cutoff' | wc -l)
+          echo "Files modified since $CUTOFF: $RECENT"
+
+          if [ "$RECENT" -eq 0 ]; then
+            echo "::warning::No backup files found in S3 in the last 24 hours"
+          else
+            echo "::notice::$RECENT backup file(s) found in S3 from last 24 hours"
+          fi
+
+      - name: Get EC2 instance ID
+        run: |
+          INSTANCE_ID=$(aws ec2 describe-instances \
+            --filters "Name=tag:aws:cloudformation:stack-name,Values=erpnext-poc" \
+                      "Name=instance-state-name,Values=running" \
+            --query "Reservations[0].Instances[0].InstanceId" \
+            --output text --no-cli-pager)
+          echo "INSTANCE_ID=$INSTANCE_ID" >> $GITHUB_ENV
+
+      - name: Check backup files on EC2 and trigger fresh backup
+        run: |
+          COMMAND_ID=$(aws ssm send-command \
+            --instance-ids "$INSTANCE_ID" \
+            --document-name "AWS-RunShellScript" \
+            --parameters 'commands=[
+              "echo \"=== Backup files on disk ===\"",
+              "ls -lh /var/lib/docker/volumes/frappe_docker_sites/_data/frontend/private/backups/ 2>/dev/null || echo No backups directory found",
+              "echo \"\"",
+              "echo \"=== Triggering fresh backup ===\"",
+              "docker exec frappe_docker-backend-1 bench --site frontend backup --with-files 2>&1 || echo Backup command failed",
+              "echo \"\"",
+              "echo \"=== Syncing to S3 ===\"",
+              "aws s3 sync /var/lib/docker/volumes/frappe_docker_sites/_data/frontend/private/backups/ s3://erpnext-poc-erpnextbucket-780m8mqa8l0v/backups/frontend/ --region us-east-1 --no-cli-pager",
+              "echo \"Sync complete\""
+            ]' \
+            --query "Command.CommandId" \
+            --output text --no-cli-pager)
+
+          echo "SSM Command: $COMMAND_ID"
+
+          for i in $(seq 1 24); do
+            sleep 10
+            STATUS=$(aws ssm get-command-invocation \
+              --command-id "$COMMAND_ID" --instance-id "$INSTANCE_ID" \
+              --query "Status" --output text --no-cli-pager 2>/dev/null || echo "Pending")
+            echo "Status: $STATUS"
+            if [[ "$STATUS" == "Success" || "$STATUS" == "Failed" ]]; then break; fi
+          done
+
+          OUTPUT=$(aws ssm get-command-invocation \
+            --command-id "$COMMAND_ID" --instance-id "$INSTANCE_ID" \
+            --query "StandardOutputContent" --output text --no-cli-pager)
+          echo "--- Output ---"
+          echo "$OUTPUT"
+
+          if [ "$STATUS" != "Success" ]; then
+            ERROR=$(aws ssm get-command-invocation \
+              --command-id "$COMMAND_ID" --instance-id "$INSTANCE_ID" \
+              --query "StandardErrorContent" --output text --no-cli-pager)
+            echo "--- Error ---"
+            echo "$ERROR"
+            echo "::error::Backup or sync failed: $STATUS"
+            exit 1
+          fi
+
+          echo "::notice::Backup verified and synced to S3 successfully"

@@ -1,0 +1,140 @@
+name: Setup HTTPS (Self-Signed SSL)
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: Install or remove HTTPS
+        required: true
+        default: install
+        type: choice
+        options:
+          - install
+          - remove
+
+jobs:
+  setup-https:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v6.1.2
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: us-east-1
+
+      - name: Get EC2 instance ID and security group
+        run: |
+          INSTANCE_ID=$(aws ec2 describe-instances \
+            --filters "Name=tag:aws:cloudformation:stack-name,Values=erpnext-poc" \
+                      "Name=instance-state-name,Values=running" \
+            --query "Reservations[0].Instances[0].InstanceId" \
+            --output text --no-cli-pager)
+          echo "INSTANCE_ID=$INSTANCE_ID" >> $GITHUB_ENV
+
+          SG_ID=$(aws ec2 describe-instances \
+            --instance-ids "$INSTANCE_ID" \
+            --query "Reservations[0].Instances[0].SecurityGroups[0].GroupId" \
+            --output text --no-cli-pager)
+          echo "SG_ID=$SG_ID" >> $GITHUB_ENV
+
+          PUBLIC_IP=$(aws ec2 describe-instances \
+            --instance-ids "$INSTANCE_ID" \
+            --query "Reservations[0].Instances[0].PublicIpAddress" \
+            --output text --no-cli-pager)
+          echo "PUBLIC_IP=$PUBLIC_IP" >> $GITHUB_ENV
+
+          echo "Instance: $INSTANCE_ID | SG: $SG_ID | IP: $PUBLIC_IP"
+
+      - name: Open port 443 in security group
+        if: inputs.action == 'install'
+        run: |
+          aws ec2 authorize-security-group-ingress \
+            --group-id "$SG_ID" \
+            --protocol tcp \
+            --port 443 \
+            --cidr 0.0.0.0/0 \
+            --no-cli-pager 2>&1 | grep -v "already exists" || true
+          echo "Port 443 open"
+
+      - name: Install nginx + self-signed SSL via SSM
+        if: inputs.action == 'install'
+        run: |
+          COMMAND_ID=$(aws ssm send-command \
+            --instance-ids "$INSTANCE_ID" \
+            --document-name "AWS-RunShellScript" \
+            --parameters "commands=[
+              \"echo '=== Installing nginx ==='\" ,
+              \"dnf install -y nginx\" ,
+              \"echo '=== Generating self-signed certificate ===' \" ,
+              \"mkdir -p /etc/nginx/ssl\" ,
+              \"openssl req -x509 -nodes -days 365 -newkey rsa:2048 -keyout /etc/nginx/ssl/erpnext.key -out /etc/nginx/ssl/erpnext.crt -subj '/CN=$PUBLIC_IP/O=ERPNext/C=US'\" ,
+              \"echo '=== Writing nginx config ===' \" ,
+              \"cat > /etc/nginx/conf.d/erpnext-ssl.conf << 'NGINXEOF'\nserver {\n    listen 443 ssl;\n    server_name _;\n    ssl_certificate /etc/nginx/ssl/erpnext.crt;\n    ssl_certificate_key /etc/nginx/ssl/erpnext.key;\n    ssl_protocols TLSv1.2 TLSv1.3;\n    ssl_ciphers HIGH:!aNULL:!MD5;\n    location / {\n        proxy_pass http://127.0.0.1:80;\n        proxy_set_header Host \\$host;\n        proxy_set_header X-Real-IP \\$remote_addr;\n        proxy_set_header X-Forwarded-For \\$proxy_add_x_forwarded_for;\n        proxy_set_header X-Forwarded-Proto https;\n        proxy_read_timeout 120s;\n    }\n}\nserver {\n    listen 80;\n    server_name _;\n    return 301 https://\\$host\\$request_uri;\n}\nNGINXEOF\" ,
+              \"nginx -t && systemctl enable nginx && systemctl restart nginx\" ,
+              \"echo '=== HTTPS configured ===' \" ,
+              \"echo \\\"ERPNext now available at: https://$PUBLIC_IP\\\"\"
+            ]" \
+            --query "Command.CommandId" \
+            --output text --no-cli-pager)
+
+          echo "SSM Command: $COMMAND_ID"
+
+          for i in $(seq 1 24); do
+            sleep 5
+            STATUS=$(aws ssm get-command-invocation \
+              --command-id "$COMMAND_ID" --instance-id "$INSTANCE_ID" \
+              --query "Status" --output text --no-cli-pager 2>/dev/null || echo "Pending")
+            echo "Status: $STATUS"
+            if [[ "$STATUS" == "Success" || "$STATUS" == "Failed" ]]; then break; fi
+          done
+
+          OUTPUT=$(aws ssm get-command-invocation \
+            --command-id "$COMMAND_ID" --instance-id "$INSTANCE_ID" \
+            --query "StandardOutputContent" --output text --no-cli-pager)
+          echo "--- Output ---"
+          echo "$OUTPUT"
+
+          if [ "$STATUS" != "Success" ]; then
+            ERROR=$(aws ssm get-command-invocation \
+              --command-id "$COMMAND_ID" --instance-id "$INSTANCE_ID" \
+              --query "StandardErrorContent" --output text --no-cli-pager)
+            echo "--- Error ---"
+            echo "$ERROR"
+            echo "::error::SSM command failed: $STATUS"
+            exit 1
+          fi
+
+          echo "::notice::HTTPS enabled at https://$PUBLIC_IP (self-signed cert — browser will show a warning, click Advanced → Proceed)"
+
+      - name: Remove HTTPS
+        if: inputs.action == 'remove'
+        run: |
+          COMMAND_ID=$(aws ssm send-command \
+            --instance-ids "$INSTANCE_ID" \
+            --document-name "AWS-RunShellScript" \
+            --parameters 'commands=[
+              "systemctl stop nginx || true",
+              "systemctl disable nginx || true",
+              "rm -f /etc/nginx/conf.d/erpnext-ssl.conf",
+              "rm -rf /etc/nginx/ssl",
+              "echo HTTPS removed"
+            ]' \
+            --query "Command.CommandId" \
+            --output text --no-cli-pager)
+
+          for i in $(seq 1 12); do
+            sleep 5
+            STATUS=$(aws ssm get-command-invocation \
+              --command-id "$COMMAND_ID" --instance-id "$INSTANCE_ID" \
+              --query "Status" --output text --no-cli-pager 2>/dev/null || echo "Pending")
+            if [[ "$STATUS" == "Success" || "$STATUS" == "Failed" ]]; then break; fi
+          done
+
+          aws ec2 revoke-security-group-ingress \
+            --group-id "$SG_ID" --protocol tcp --port 443 --cidr 0.0.0.0/0 \
+            --no-cli-pager 2>/dev/null || true
+
+          echo "::notice::HTTPS removed"
