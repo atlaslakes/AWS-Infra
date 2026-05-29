@@ -65,18 +65,37 @@ jobs:
           COMMAND_ID=$(aws ssm send-command \
             --instance-ids "$INSTANCE_ID" \
             --document-name "AWS-RunShellScript" \
-            --parameters "commands=[
-              \"echo '=== Installing nginx ==='\" ,
-              \"dnf install -y nginx\" ,
-              \"echo '=== Generating self-signed certificate ===' \" ,
-              \"mkdir -p /etc/nginx/ssl\" ,
-              \"openssl req -x509 -nodes -days 365 -newkey rsa:2048 -keyout /etc/nginx/ssl/erpnext.key -out /etc/nginx/ssl/erpnext.crt -subj '/CN=$PUBLIC_IP/O=ERPNext/C=US'\" ,
-              \"echo '=== Writing nginx config ===' \" ,
-              \"cat > /etc/nginx/conf.d/erpnext-ssl.conf << 'NGINXEOF'\nserver {\n    listen 443 ssl;\n    server_name _;\n    ssl_certificate /etc/nginx/ssl/erpnext.crt;\n    ssl_certificate_key /etc/nginx/ssl/erpnext.key;\n    ssl_protocols TLSv1.2 TLSv1.3;\n    ssl_ciphers HIGH:!aNULL:!MD5;\n    location / {\n        proxy_pass http://127.0.0.1:80;\n        proxy_set_header Host \\$host;\n        proxy_set_header X-Real-IP \\$remote_addr;\n        proxy_set_header X-Forwarded-For \\$proxy_add_x_forwarded_for;\n        proxy_set_header X-Forwarded-Proto https;\n        proxy_read_timeout 120s;\n    }\n}\nserver {\n    listen 80;\n    server_name _;\n    return 301 https://\\$host\\$request_uri;\n}\nNGINXEOF\" ,
-              \"nginx -t && systemctl enable nginx && systemctl restart nginx\" ,
-              \"echo '=== HTTPS configured ===' \" ,
-              \"echo \\\"ERPNext now available at: https://$PUBLIC_IP\\\"\"
-            ]" \
+            --parameters 'commands=[
+              "echo === Installing nginx ===",
+              "dnf install -y nginx",
+              "echo === Generating self-signed certificate ===",
+              "mkdir -p /etc/nginx/ssl",
+              "openssl req -x509 -nodes -days 365 -newkey rsa:2048 -keyout /etc/nginx/ssl/erpnext.key -out /etc/nginx/ssl/erpnext.crt -subj /CN=erpnext/O=ERPNext/C=US",
+              "echo === Writing nginx config ===",
+              "echo server { > /etc/nginx/conf.d/erpnext-ssl.conf",
+              "echo     listen 443 ssl; >> /etc/nginx/conf.d/erpnext-ssl.conf",
+              "echo     server_name _; >> /etc/nginx/conf.d/erpnext-ssl.conf",
+              "echo     ssl_certificate /etc/nginx/ssl/erpnext.crt; >> /etc/nginx/conf.d/erpnext-ssl.conf",
+              "echo     ssl_certificate_key /etc/nginx/ssl/erpnext.key; >> /etc/nginx/conf.d/erpnext-ssl.conf",
+              "echo     ssl_protocols TLSv1.2 TLSv1.3; >> /etc/nginx/conf.d/erpnext-ssl.conf",
+              "echo     ssl_ciphers HIGH:!aNULL:!MD5; >> /etc/nginx/conf.d/erpnext-ssl.conf",
+              "echo     location / { >> /etc/nginx/conf.d/erpnext-ssl.conf",
+              "echo         proxy_pass http://127.0.0.1:80; >> /etc/nginx/conf.d/erpnext-ssl.conf",
+              "echo         proxy_set_header Host $host; >> /etc/nginx/conf.d/erpnext-ssl.conf",
+              "echo         proxy_set_header X-Real-IP $remote_addr; >> /etc/nginx/conf.d/erpnext-ssl.conf",
+              "echo         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for; >> /etc/nginx/conf.d/erpnext-ssl.conf",
+              "echo         proxy_set_header X-Forwarded-Proto https; >> /etc/nginx/conf.d/erpnext-ssl.conf",
+              "echo         proxy_read_timeout 120s; >> /etc/nginx/conf.d/erpnext-ssl.conf",
+              "echo     } >> /etc/nginx/conf.d/erpnext-ssl.conf",
+              "echo } >> /etc/nginx/conf.d/erpnext-ssl.conf",
+              "echo server { >> /etc/nginx/conf.d/erpnext-ssl.conf",
+              "echo     listen 80; >> /etc/nginx/conf.d/erpnext-ssl.conf",
+              "echo     server_name _; >> /etc/nginx/conf.d/erpnext-ssl.conf",
+              "echo     return 301 https://$host$request_uri; >> /etc/nginx/conf.d/erpnext-ssl.conf",
+              "echo } >> /etc/nginx/conf.d/erpnext-ssl.conf",
+              "nginx -t && systemctl enable nginx && systemctl restart nginx",
+              "echo === HTTPS configured ==="
+            ]' \
             --query "Command.CommandId" \
             --output text --no-cli-pager)
 
