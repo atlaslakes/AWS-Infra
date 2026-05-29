@@ -1,0 +1,133 @@
+name: Configure ERPNext Auto-Start on Reboot
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: Install or remove the auto-start service
+        required: true
+        default: install
+        type: choice
+        options:
+          - install
+          - remove
+
+jobs:
+  configure-autostart:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v6.1.2
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: us-east-1
+
+      - name: Get EC2 instance ID
+        id: get-instance
+        run: |
+          INSTANCE_ID=$(aws ec2 describe-instances \
+            --filters "Name=tag:aws:cloudformation:stack-name,Values=erpnext-poc" \
+                      "Name=instance-state-name,Values=running" \
+            --query "Reservations[0].Instances[0].InstanceId" \
+            --output text --no-cli-pager)
+          echo "INSTANCE_ID=$INSTANCE_ID" >> $GITHUB_ENV
+          echo "Instance: $INSTANCE_ID"
+
+      - name: Install auto-start systemd service
+        if: inputs.action == 'install'
+        run: |
+          COMMAND_ID=$(aws ssm send-command \
+            --instance-ids "$INSTANCE_ID" \
+            --document-name "AWS-RunShellScript" \
+            --parameters 'commands=[
+              "echo \"=== Creating systemd service for ERPNext ===\"",
+              "cat > /etc/systemd/system/erpnext.service << '"'"'EOF'"'"'",
+              "[Unit]",
+              "Description=ERPNext Docker Compose Stack",
+              "Requires=docker.service",
+              "After=docker.service network-online.target",
+              "Wants=network-online.target",
+              "",
+              "[Service]",
+              "Type=oneshot",
+              "RemainAfterExit=yes",
+              "WorkingDirectory=/home/ec2-user/frappe_docker",
+              "ExecStart=/usr/bin/docker compose up -d --remove-orphans",
+              "ExecStop=/usr/bin/docker compose stop",
+              "TimeoutStartSec=300",
+              "User=ec2-user",
+              "",
+              "[Install]",
+              "WantedBy=multi-user.target",
+              "EOF",
+              "systemctl daemon-reload",
+              "systemctl enable erpnext.service",
+              "systemctl status erpnext.service --no-pager",
+              "echo \"=== Auto-start configured. ERPNext will start automatically on reboot. ===\""
+            ]' \
+            --query "Command.CommandId" \
+            --output text --no-cli-pager)
+
+          echo "SSM Command ID: $COMMAND_ID"
+
+          for i in $(seq 1 20); do
+            sleep 5
+            STATUS=$(aws ssm get-command-invocation \
+              --command-id "$COMMAND_ID" \
+              --instance-id "$INSTANCE_ID" \
+              --query "Status" --output text --no-cli-pager 2>/dev/null || echo "Pending")
+            echo "Status: $STATUS"
+            if [[ "$STATUS" == "Success" || "$STATUS" == "Failed" ]]; then break; fi
+          done
+
+          OUTPUT=$(aws ssm get-command-invocation \
+            --command-id "$COMMAND_ID" \
+            --instance-id "$INSTANCE_ID" \
+            --query "StandardOutputContent" \
+            --output text --no-cli-pager)
+          echo "--- Output ---"
+          echo "$OUTPUT"
+
+          if [ "$STATUS" != "Success" ]; then
+            ERROR=$(aws ssm get-command-invocation \
+              --command-id "$COMMAND_ID" \
+              --instance-id "$INSTANCE_ID" \
+              --query "StandardErrorContent" \
+              --output text --no-cli-pager)
+            echo "--- Error ---"
+            echo "$ERROR"
+            echo "::error::SSM command failed: $STATUS"
+            exit 1
+          fi
+
+          echo "::notice::Auto-start service installed. ERPNext will recover automatically after any reboot."
+
+      - name: Remove auto-start systemd service
+        if: inputs.action == 'remove'
+        run: |
+          COMMAND_ID=$(aws ssm send-command \
+            --instance-ids "$INSTANCE_ID" \
+            --document-name "AWS-RunShellScript" \
+            --parameters 'commands=[
+              "systemctl disable erpnext.service || true",
+              "systemctl stop erpnext.service || true",
+              "rm -f /etc/systemd/system/erpnext.service",
+              "systemctl daemon-reload",
+              "echo \"Auto-start service removed.\""
+            ]' \
+            --query "Command.CommandId" \
+            --output text --no-cli-pager)
+
+          for i in $(seq 1 12); do
+            sleep 5
+            STATUS=$(aws ssm get-command-invocation \
+              --command-id "$COMMAND_ID" \
+              --instance-id "$INSTANCE_ID" \
+              --query "Status" --output text --no-cli-pager 2>/dev/null || echo "Pending")
+            if [[ "$STATUS" == "Success" || "$STATUS" == "Failed" ]]; then break; fi
+          done
+
+          echo "::notice::Auto-start service removed."
