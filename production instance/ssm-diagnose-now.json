@@ -1,0 +1,15 @@
+{
+  "DocumentName": "AWS-RunShellScript",
+  "InstanceIds": ["i-02c81e8b43b3a641e"],
+  "Parameters": {
+    "commands": [
+      "docker ps --format '{{.Names}} {{.Status}}'",
+      "echo '---'",
+      "docker exec frappe_docker-backend-1 bash -lc 'ls -1 /home/frappe/frappe-bench/sites'",
+      "echo '---'",
+      "docker logs --tail 80 frappe_docker-frontend-1",
+      "echo '---'",
+      "docker logs --tail 80 frappe_docker-backend-1"
+    ]
+  }
+}

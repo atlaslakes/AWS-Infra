@@ -1,0 +1,22 @@
+{
+  "DocumentName": "AWS-RunShellScript",
+  "InstanceIds": ["i-02c81e8b43b3a641e"],
+  "Parameters": {
+    "commands": [
+      "set -euo pipefail",
+      "docker exec frappe_docker-db-1 sh -lc \"mariadb -uroot -e \\\"CREATE USER IF NOT EXISTS 'root'@'%' IDENTIFIED BY 'admin'; GRANT ALL PRIVILEGES ON *.* TO 'root'@'%' WITH GRANT OPTION; FLUSH PRIVILEGES;\\\"\"",
+      "if docker exec frappe_docker-backend-1 test -d /home/frappe/frappe-bench/sites/frontend; then echo 'Site frontend already exists'; else docker exec frappe_docker-backend-1 bash -lc \"bench new-site frontend --admin-password 'admin' --mariadb-root-password 'admin' --mariadb-user-host-login-scope='%'\"; fi",
+      "docker exec frappe_docker-backend-1 bash -lc \"bench --site frontend install-app erpnext || true\"",
+      "docker exec frappe_docker-backend-1 bash -lc \"bench --site frontend migrate\"",
+      "docker exec frappe_docker-backend-1 bash -lc \"bench use frontend\"",
+      "docker exec frappe_docker-backend-1 bash -lc \"bench --site frontend set-config host_name https://karavanimports.com\"",
+      "docker exec frappe_docker-backend-1 bash -lc \"bench --site frontend add-domain karavanimports.com || true\"",
+      "docker exec frappe_docker-backend-1 bash -lc \"bench --site frontend add-domain erpnext-prod-alb-1243208729.us-east-1.elb.amazonaws.com || true\"",
+      "docker exec frappe_docker-backend-1 bash -lc \"bench --site frontend add-domain 100.57.63.224 || true\"",
+      "docker restart frappe_docker-frontend-1",
+      "sleep 8",
+      "docker exec frappe_docker-backend-1 ls -1 /home/frappe/frappe-bench/sites",
+      "curl -I http://127.0.0.1:80 || true"
+    ]
+  }
+}

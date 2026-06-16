@@ -1,0 +1,11 @@
+{
+  "DocumentName": "AWS-RunShellScript",
+  "InstanceIds": ["i-02c81e8b43b3a641e"],
+  "Parameters": {
+    "commands": [
+      "ss -lntp | grep :80 || true",
+      "docker ps --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}' || true",
+      "curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:80 || true"
+    ]
+  }
+}

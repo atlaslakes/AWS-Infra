@@ -1,0 +1,13 @@
+{
+  "DocumentName": "AWS-RunShellScript",
+  "InstanceIds": ["i-02c81e8b43b3a641e"],
+  "Parameters": {
+    "commands": [
+      "date",
+      "ss -lntp",
+      "docker ps --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}'",
+      "curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:80 || true",
+      "tail -n 120 /var/log/erpnext-bootstrap.log || true"
+    ]
+  }
+}

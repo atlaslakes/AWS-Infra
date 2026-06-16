@@ -1,0 +1,14 @@
+{
+  "DocumentName": "AWS-RunShellScript",
+  "InstanceIds": ["i-02c81e8b43b3a641e"],
+  "Parameters": {
+    "commands": [
+      "set +e",
+      "echo ==== root no password test ====",
+      "docker exec frappe_docker-db-1 sh -lc \"mariadb -uroot -e 'SELECT 1'\"",
+      "echo no_password_rc=$?",
+      "echo ==== root env ====",
+      "docker inspect frappe_docker-db-1 --format '{{json .Config.Env}}'"
+    ]
+  }
+}

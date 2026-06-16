@@ -1,0 +1,37 @@
+{
+  "DocumentName": "AWS-RunShellScript",
+  "InstanceIds": ["i-02c81e8b43b3a641e"],
+  "Parameters": {
+    "commands": [
+      "set -euxo pipefail",
+      "dnf install -y docker git jq awscli",
+      "systemctl enable docker",
+      "systemctl restart docker",
+      "usermod -aG docker ec2-user || true",
+      "if ! docker compose version >/dev/null 2>&1; then curl -L https://github.com/docker/compose/releases/download/v2.29.2/docker-compose-linux-x86_64 -o /usr/local/bin/docker-compose && chmod +x /usr/local/bin/docker-compose; fi",
+      "mkdir -p /opt/erpnext && cd /opt/erpnext",
+      "DB_SECRET_ID='arn:aws:secretsmanager:us-east-1:319125696520:secret:DBSecret-mvcijJobuF0y-38cWjF'",
+      "APP_SECRET_ID='arn:aws:secretsmanager:us-east-1:319125696520:secret:AppSecret-0Ko8v7FfF4Kl-e889QE'",
+      "RDS_HOST='erpnext-prod-clean-20260615c-erpnextdb-xodlfe8sb0gw.c2diyosis802.us-east-1.rds.amazonaws.com'",
+      "REDIS_CACHE_HOST='erp-er-1nu6r238fa6n4.dj78vm.0001.use1.cache.amazonaws.com'",
+      "REDIS_QUEUE_HOST='erp-er-c72frwmjw93i.dj78vm.0001.use1.cache.amazonaws.com'",
+      "S3_BUCKET='erpnext-prod-clean-20260615c-erpnextbucket-xsksgsca2hzy'",
+      "ERP_VERSION='v15'",
+      "DB_SECRET_JSON=$(aws secretsmanager get-secret-value --secret-id \"$DB_SECRET_ID\" --query SecretString --output text)",
+      "APP_SECRET_JSON=$(aws secretsmanager get-secret-value --secret-id \"$APP_SECRET_ID\" --query SecretString --output text)",
+      "DB_PASSWORD=$(echo \"$DB_SECRET_JSON\" | jq -r '.db_password')",
+      "DB_ROOT_PASSWORD=$(echo \"$DB_SECRET_JSON\" | jq -r '.db_root_password')",
+      "ADMIN_PASSWORD=$(echo \"$APP_SECRET_JSON\" | jq -r '.admin_password')",
+      "rm -rf /opt/erpnext/frappe_docker",
+      "git clone --depth 1 https://github.com/frappe/frappe_docker.git /opt/erpnext/frappe_docker",
+      "cd /opt/erpnext/frappe_docker",
+      "cat > .env <<EOF\nDB_HOST=$RDS_HOST\nDB_PORT=3306\nDB_PASSWORD=$DB_PASSWORD\nDB_ROOT_PASSWORD=$DB_ROOT_PASSWORD\nREDIS_CACHE=$REDIS_CACHE_HOST:6379\nREDIS_QUEUE=$REDIS_QUEUE_HOST:6379\nREDIS_SOCKETIO=$REDIS_QUEUE_HOST:6379\nERPNEXT_VERSION=$ERP_VERSION\nADMIN_PASSWORD=$ADMIN_PASSWORD\nBACKUP_S3_BUCKET=$S3_BUCKET\nEOF",
+      "cat > compose.public.yml <<EOF\nservices:\n  frontend:\n    ports:\n      - \"80:8080\"\nEOF",
+      "if [ -f pwd.yml ]; then COMPOSE_FILE=pwd.yml; elif [ -f compose.yaml ]; then COMPOSE_FILE=compose.yaml; else COMPOSE_FILE=docker-compose.yml; fi",
+      "if docker compose version >/dev/null 2>&1; then docker compose -f \"$COMPOSE_FILE\" -f compose.public.yml up -d; else /usr/local/bin/docker-compose -f \"$COMPOSE_FILE\" -f compose.public.yml up -d; fi",
+      "sleep 20",
+      "docker ps --format 'table {{.Names}}\\t{{.Status}}\\t{{.Ports}}'",
+      "curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:80 || true"
+    ]
+  }
+}

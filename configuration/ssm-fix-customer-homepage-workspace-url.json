@@ -1,0 +1,35 @@
+{
+  "DocumentName": "AWS-RunShellScript",
+  "InstanceIds": ["i-0be6845d8493d077a"],
+  "Parameters": {
+    "commands": [
+      "set -e",
+      "cat > /tmp/fix_customer_homepage_workspace_url.py <<'PY'",
+      "import frappe",
+      "",
+      "ROLE = 'Customer'",
+      "WORKSPACE = 'Customer Dashboard'",
+      "HOME_PAGE = '/app/workspace/Customer Dashboard'",
+      "",
+      "def run():",
+      "    users = sorted(set([",
+      "        r.get('parent')",
+      "        for r in frappe.get_all('Has Role', fields=['parent'], filters={'parenttype': 'User', 'role': ROLE})",
+      "        if r.get('parent') and r.get('parent') != 'Guest'",
+      "    ]))",
+      "",
+      "    for uid in users:",
+      "        frappe.db.set_value('User', uid, 'default_workspace', WORKSPACE, update_modified=False)",
+      "        frappe.db.set_value('User', uid, 'home_page', HOME_PAGE, update_modified=False)",
+      "        print(f'- {uid}: home_page={HOME_PAGE}')",
+      "",
+      "    frappe.db.commit()",
+      "    print('Updated users:', len(users))",
+      "PY",
+      "docker cp /tmp/fix_customer_homepage_workspace_url.py frappe_docker-backend-1:/home/frappe/frappe-bench/apps/frappe/frappe/custom_fix_customer_homepage_workspace_url.py",
+      "docker exec -w /home/frappe/frappe-bench frappe_docker-backend-1 bash -lc 'bench --site frontend execute frappe.custom_fix_customer_homepage_workspace_url.run'",
+      "docker exec frappe_docker-backend-1 bash -lc 'bench --site frontend clear-cache && bench --site frontend clear-website-cache'",
+      "docker exec -w /home/frappe/frappe-bench frappe_docker-backend-1 bash -lc 'rm -f /home/frappe/frappe-bench/apps/frappe/frappe/custom_fix_customer_homepage_workspace_url.py'"
+    ]
+  }
+}

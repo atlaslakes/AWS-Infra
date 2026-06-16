@@ -72,6 +72,11 @@ $parameterOverrides = @(
     "InstanceType=$([System.Environment]::GetEnvironmentVariable('INSTANCE_TYPE'))"
 )
 
+$notificationEmail = [System.Environment]::GetEnvironmentVariable('NOTIFICATION_EMAIL')
+if (-not [string]::IsNullOrWhiteSpace($notificationEmail)) {
+    $parameterOverrides += "NotificationEmail=$notificationEmail"
+}
+
 Write-Host 'Deploying CloudFormation stack using local env file...'
 $awsExe = Get-AwsCliCommand
 $awsCommand = @(

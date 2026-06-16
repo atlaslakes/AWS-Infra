@@ -1,0 +1,10 @@
+{
+  "commands": [
+    "set -e",
+    "docker exec frappe_docker-backend-1 bench set-config -g host_name http://3.216.86.193",
+    "docker exec frappe_docker-backend-1 bench --site frontend set-config host_name http://3.216.86.193",
+    "docker exec frappe_docker-backend-1 bench --site frontend clear-cache",
+    "docker exec frappe_docker-backend-1 bench --site frontend clear-website-cache",
+    "docker exec frappe_docker-backend-1 sh -lc 'echo COMMON:; grep -i host_name /home/frappe/frappe-bench/sites/common_site_config.json || true; echo SITE:; grep -i host_name /home/frappe/frappe-bench/sites/frontend/site_config.json || true'"
+  ]
+}

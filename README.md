@@ -2,6 +2,15 @@
 
 CloudFormation infrastructure for ERPNext POC on AWS.
 
+## Guides
+
+- [ERPNext Dashboard Customization Guide](DASHBOARD-CUSTOMIZATION-GUIDE.md)
+
+## Dashboard Assets
+
+- `configuration/erpnext-item-uniqueness-server-script.py`
+- `configuration/dashboard-report-queries.sql`
+
 ## Template
 
 - `erpnext-poc.yaml`

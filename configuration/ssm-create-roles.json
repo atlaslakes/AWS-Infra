@@ -1,0 +1,31 @@
+{
+  "DocumentName": "AWS-RunShellScript",
+  "InstanceIds": ["i-0be6845d8493d077a"],
+  "Parameters": {
+    "commands": [
+      "set -e",
+      "cat > /tmp/create_roles.py <<'PY'",
+      "import frappe",
+      "",
+      "def ensure_role(role_name):",
+      "    if frappe.db.exists('Role', role_name):",
+      "        print(f'Role exists: {role_name}')",
+      "        return",
+      "    doc = frappe.get_doc({'doctype': 'Role', 'role_name': role_name})",
+      "    doc.insert(ignore_permissions=True)",
+      "    print(f'Role created: {role_name}')",
+      "",
+      "def run():",
+      "    ensure_role('Customer')",
+      "    ensure_role('Accountant')",
+      "    frappe.db.commit()",
+      "    print('Final roles check:')",
+      "    print('Customer:', bool(frappe.db.exists('Role', 'Customer')))",
+      "    print('Accountant:', bool(frappe.db.exists('Role', 'Accountant')))",
+      "PY",
+      "docker cp /tmp/create_roles.py frappe_docker-backend-1:/home/frappe/frappe-bench/apps/frappe/frappe/custom_create_roles.py",
+      "docker exec -w /home/frappe/frappe-bench frappe_docker-backend-1 bash -lc 'bench --site frontend execute frappe.custom_create_roles.run'",
+      "docker exec -w /home/frappe/frappe-bench frappe_docker-backend-1 bash -lc 'rm -f /home/frappe/frappe-bench/apps/frappe/frappe/custom_create_roles.py'"
+    ]
+  }
+}

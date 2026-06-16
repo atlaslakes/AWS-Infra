@@ -1,0 +1,23 @@
+{
+  "DocumentName": "AWS-RunShellScript",
+  "InstanceIds": ["i-0be6845d8493d077a"],
+  "Parameters": {
+    "commands": [
+      "set -e",
+      "cat > /tmp/check_customer_user_view.py <<'PY'",
+      "import frappe",
+      "",
+      "def run():",
+      "    user = frappe.get_doc('User', 'aizen')",
+      "    print('User:', user.name)",
+      "    print('User Type:', user.user_type)",
+      "    print('Role Profile:', user.role_profile_name)",
+      "    roles = [r.role for r in (user.roles or [])]",
+      "    print('Roles:', ', '.join(sorted(roles)))",
+      "PY",
+      "docker cp /tmp/check_customer_user_view.py frappe_docker-backend-1:/home/frappe/frappe-bench/apps/frappe/frappe/custom_check_customer_user_view.py",
+      "docker exec -w /home/frappe/frappe-bench frappe_docker-backend-1 bash -lc 'bench --site frontend execute frappe.custom_check_customer_user_view.run'",
+      "docker exec -w /home/frappe/frappe-bench frappe_docker-backend-1 bash -lc 'rm -f /home/frappe/frappe-bench/apps/frappe/frappe/custom_check_customer_user_view.py'"
+    ]
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "DocumentName": "AWS-RunShellScript",
+  "InstanceIds": ["i-02c81e8b43b3a641e"],
+  "Parameters": {
+    "commands": [
+      "set -euo pipefail",
+      "SITE_JSON=$(docker exec frappe_docker-backend-1 cat /home/frappe/frappe-bench/sites/frontend/site_config.json)",
+      "DB_NAME=$(echo \"$SITE_JSON\" | jq -r '.db_name')",
+      "DB_PASS=$(echo \"$SITE_JSON\" | jq -r '.db_password')",
+      "SQL=\"CREATE USER IF NOT EXISTS '$DB_NAME'@'%' IDENTIFIED BY '$DB_PASS'; ALTER USER '$DB_NAME'@'%' IDENTIFIED BY '$DB_PASS'; GRANT ALL PRIVILEGES ON `$DB_NAME`.* TO '$DB_NAME'@'%'; FLUSH PRIVILEGES;\"",
+      "docker exec frappe_docker-db-1 sh -lc \"mariadb -uroot -padmin -e \\\"$SQL\\\"\"",
+      "docker exec frappe_docker-backend-1 bash -lc \"bench use frontend\"",
+      "docker exec frappe_docker-backend-1 bash -lc \"bench --site frontend clear-cache || true\"",
+      "docker restart frappe_docker-backend-1 frappe_docker-frontend-1",
+      "sleep 10",
+      "docker exec frappe_docker-db-1 sh -lc \"mariadb -uroot -padmin -e \\\"SHOW GRANTS FOR '$DB_NAME'@'%';\\\"\"",
+      "curl -sS -m 15 -I http://127.0.0.1:80 || true"
+    ]
+  }
+}

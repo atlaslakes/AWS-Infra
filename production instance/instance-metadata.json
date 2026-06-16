@@ -1,0 +1,23 @@
+{
+  "name": "production instance",
+  "environment": "production",
+  "aws": {
+    "region": "us-east-1",
+    "stack": "erpnext-prod-clean-20260615c",
+    "instanceId": "i-02c81e8b43b3a641e",
+    "publicIp": "100.57.63.224",
+    "albDns": "erpnext-prod-alb-1243208729.us-east-1.elb.amazonaws.com",
+    "targetGroupArn": "arn:aws:elasticloadbalancing:us-east-1:319125696520:targetgroup/erpnext-prod-tg/79dae9147ff1bddb",
+    "certificateArn": "arn:aws:acm:us-east-1:319125696520:certificate/d7b7117d-bc80-44c5-878e-cc2b5a112b28",
+    "domain": "karavanimports.com"
+  },
+  "scripts": [
+    "ssm-bootstrap-new-instance.json",
+    "ssm-bind-frontend.json",
+    "ssm-bind-frontend-retry.json",
+    "ssm-bind-frontend-final.json",
+    "ssm-fix-frontend-db-user.json",
+    "ssm-fix-frontend-db-user-v2.json",
+    "ssm-reinstall-frontend-bind.json"
+  ]
+}

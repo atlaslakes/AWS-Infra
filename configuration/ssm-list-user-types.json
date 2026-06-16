@@ -1,0 +1,21 @@
+{
+  "DocumentName": "AWS-RunShellScript",
+  "InstanceIds": ["i-0be6845d8493d077a"],
+  "Parameters": {
+    "commands": [
+      "set -e",
+      "cat > /tmp/list_user_types.py <<'PY'",
+      "import frappe",
+      "",
+      "def run():",
+      "    users = frappe.get_all('User', fields=['name', 'user_type', 'enabled'], limit_page_length=500)",
+      "    users = sorted(users, key=lambda x: x.get('name') or '')",
+      "    for u in users:",
+      "        print(f\"{u.get('name')} | {u.get('user_type')} | enabled={u.get('enabled')}\")",
+      "PY",
+      "docker cp /tmp/list_user_types.py frappe_docker-backend-1:/home/frappe/frappe-bench/apps/frappe/frappe/custom_list_user_types.py",
+      "docker exec -w /home/frappe/frappe-bench frappe_docker-backend-1 bash -lc 'bench --site frontend execute frappe.custom_list_user_types.run'",
+      "docker exec -w /home/frappe/frappe-bench frappe_docker-backend-1 bash -lc 'rm -f /home/frappe/frappe-bench/apps/frappe/frappe/custom_list_user_types.py'"
+    ]
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "DocumentName": "AWS-RunShellScript",
+  "InstanceIds": ["i-0be6845d8493d077a"],
+  "Parameters": {
+    "commands": [
+      "set -e",
+      "cat > /tmp/clear_email_queue.py <<'PY'",
+      "import frappe",
+      "",
+      "def run():",
+      "    before = frappe.db.count('Email Queue')",
+      "    print(f'Email Queue before: {before}')",
+      "    frappe.db.delete('Email Queue')",
+      "    frappe.db.commit()",
+      "    after = frappe.db.count('Email Queue')",
+      "    print(f'Email Queue after: {after}')",
+      "PY",
+      "docker cp /tmp/clear_email_queue.py frappe_docker-backend-1:/home/frappe/frappe-bench/apps/frappe/frappe/custom_clear_email_queue.py",
+      "docker exec -w /home/frappe/frappe-bench frappe_docker-backend-1 bash -lc 'bench --site frontend execute frappe.custom_clear_email_queue.run'",
+      "docker exec -w /home/frappe/frappe-bench frappe_docker-backend-1 bash -lc 'rm -f /home/frappe/frappe-bench/apps/frappe/frappe/custom_clear_email_queue.py'"
+    ]
+  }
+}

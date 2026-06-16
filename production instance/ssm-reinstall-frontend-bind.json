@@ -1,0 +1,22 @@
+{
+  "DocumentName": "AWS-RunShellScript",
+  "InstanceIds": ["i-02c81e8b43b3a641e"],
+  "Parameters": {
+    "commands": [
+      "set -euxo pipefail",
+      "docker exec frappe_docker-db-1 sh -lc \"mariadb -uroot -e \\\"SELECT 1\\\" || mariadb -uroot -padmin -e \\\"SELECT 1\\\"\"",
+      "docker exec frappe_docker-backend-1 bash -lc \"bench --site frontend reinstall --yes --admin-password admin --mariadb-root-password admin\"",
+      "docker exec frappe_docker-backend-1 bash -lc \"bench --site frontend install-app erpnext\"",
+      "docker exec frappe_docker-backend-1 bash -lc \"bench --site frontend migrate\"",
+      "docker exec frappe_docker-backend-1 bash -lc \"bench use frontend\"",
+      "docker exec frappe_docker-backend-1 bash -lc \"bench --site frontend set-config host_name https://karavanimports.com\"",
+      "docker exec frappe_docker-backend-1 bash -lc \"bench --site frontend add-domain karavanimports.com || true\"",
+      "docker exec frappe_docker-backend-1 bash -lc \"bench --site frontend add-domain erpnext-prod-alb-1243208729.us-east-1.elb.amazonaws.com || true\"",
+      "docker exec frappe_docker-backend-1 bash -lc \"bench --site frontend add-domain 100.57.63.224 || true\"",
+      "docker restart frappe_docker-frontend-1",
+      "sleep 10",
+      "docker exec frappe_docker-backend-1 bash -lc \"bench --site frontend list-apps\"",
+      "curl -I http://127.0.0.1:80 || true"
+    ]
+  }
+}

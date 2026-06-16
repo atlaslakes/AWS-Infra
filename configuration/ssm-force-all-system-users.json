@@ -1,0 +1,39 @@
+{
+  "DocumentName": "AWS-RunShellScript",
+  "InstanceIds": ["i-0be6845d8493d077a"],
+  "Parameters": {
+    "commands": [
+      "set -e",
+      "cat > /tmp/force_all_system_users.py <<'PY'",
+      "import frappe",
+      "",
+      "def run():",
+      "    users = frappe.get_all('User', fields=['name', 'user_type'], limit_page_length=500)",
+      "    changed = 0",
+      "    for u in users:",
+      "        name = u.get('name')",
+      "        if name == 'Guest':",
+      "            continue",
+      "        if u.get('user_type') != 'System User':",
+      "            frappe.db.set_value('User', name, 'user_type', 'System User', update_modified=False)",
+      "            changed += 1",
+      "",
+      "    # Keep future default as System User.",
+      "    df_name = frappe.db.get_value('DocField', {'parent': 'User', 'fieldname': 'user_type'}, 'name')",
+      "    if df_name:",
+      "        frappe.db.set_value('DocField', df_name, 'default', 'System User', update_modified=False)",
+      "",
+      "    frappe.db.commit()",
+      "",
+      "    print('Changed users:', changed)",
+      "    print('Final user types:')",
+      "    final_rows = frappe.get_all('User', fields=['name', 'user_type'], limit_page_length=500)",
+      "    for r in sorted(final_rows, key=lambda x: x.get('name') or ''):",
+      "        print(f\"{r.get('name')} | {r.get('user_type')}\")",
+      "PY",
+      "docker cp /tmp/force_all_system_users.py frappe_docker-backend-1:/home/frappe/frappe-bench/apps/frappe/frappe/custom_force_all_system_users.py",
+      "docker exec -w /home/frappe/frappe-bench frappe_docker-backend-1 bash -lc 'bench --site frontend execute frappe.custom_force_all_system_users.run'",
+      "docker exec -w /home/frappe/frappe-bench frappe_docker-backend-1 bash -lc 'rm -f /home/frappe/frappe-bench/apps/frappe/frappe/custom_force_all_system_users.py'"
+    ]
+  }
+}

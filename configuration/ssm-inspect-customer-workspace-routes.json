@@ -1,0 +1,33 @@
+{
+  "DocumentName": "AWS-RunShellScript",
+  "InstanceIds": ["i-0be6845d8493d077a"],
+  "Parameters": {
+    "commands": [
+      "set -e",
+      "cat > /tmp/inspect_customer_workspace_routes.py <<'PY'",
+      "import frappe",
+      "",
+      "def run():",
+      "    rows = frappe.get_all('Workspace', fields=['name', 'title', 'label', 'route', 'public', 'is_hidden'], limit_page_length=500)",
+      "    print('Customer-related workspaces:')",
+      "    for r in sorted(rows, key=lambda x: (x.get('name') or '').lower()):",
+      "        text = ' '.join([str(r.get('name') or ''), str(r.get('title') or ''), str(r.get('label') or ''), str(r.get('route') or '')]).lower()",
+      "        if 'customer' in text or (r.get('route') == 'customer-dashboard'):",
+      "            print(f\"- {r.get('name')} | title={r.get('title')} | label={r.get('label')} | route={r.get('route')} | public={r.get('public')} | hidden={r.get('is_hidden')}\")",
+      "",
+      "    print('Users with Customer role:')",
+      "    users = sorted(set([",
+      "        r.get('parent')",
+      "        for r in frappe.get_all('Has Role', fields=['parent'], filters={'parenttype': 'User', 'role': 'Customer'})",
+      "        if r.get('parent') and r.get('parent') != 'Guest'",
+      "    ]))",
+      "    for uid in users:",
+      "        user = frappe.get_doc('User', uid)",
+      "        print(f\"- {uid} | default_workspace={user.default_workspace} | module_profile={user.module_profile}\")",
+      "PY",
+      "docker cp /tmp/inspect_customer_workspace_routes.py frappe_docker-backend-1:/home/frappe/frappe-bench/apps/frappe/frappe/custom_inspect_customer_workspace_routes.py",
+      "docker exec -w /home/frappe/frappe-bench frappe_docker-backend-1 bash -lc 'bench --site frontend execute frappe.custom_inspect_customer_workspace_routes.run'",
+      "docker exec -w /home/frappe/frappe-bench frappe_docker-backend-1 bash -lc 'rm -f /home/frappe/frappe-bench/apps/frappe/frappe/custom_inspect_customer_workspace_routes.py'"
+    ]
+  }
+}
