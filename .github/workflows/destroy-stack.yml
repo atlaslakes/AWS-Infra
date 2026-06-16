@@ -3,13 +3,22 @@ name: Destroy ERPNext Stack
 on:
   workflow_dispatch:
     inputs:
+      environment:
+        description: Target environment
+        required: true
+        default: dev
+        type: choice
+        options:
+          - dev
+          - prod
       confirm:
-        description: Type "destroy" to confirm — this deletes ALL AWS resources
+        description: Type "destroy" to confirm
         required: true
 
 jobs:
   destroy-stack:
     runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
     permissions:
       id-token: write
       contents: read
@@ -17,28 +26,19 @@ jobs:
       - name: Validate confirmation
         run: |
           if [ "${{ inputs.confirm }}" != "destroy" ]; then
-            echo "::error::You must type exactly 'destroy' to confirm. Got: '${{ inputs.confirm }}'"
+            echo "::error::You must type exactly 'destroy' to confirm."
             exit 1
           fi
 
       - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v6.1.2
+        uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
           aws-region: us-east-1
 
       - name: Delete CloudFormation stack
         run: |
-          echo "Deleting stack erpnext-poc..."
-
-          aws cloudformation delete-stack \
-            --stack-name erpnext-poc \
-            --no-cli-pager
-
-          echo "Waiting for deletion to complete..."
-
-          aws cloudformation wait stack-delete-complete \
-            --stack-name erpnext-poc \
-            --no-cli-pager
-
-          echo "::notice::Stack erpnext-poc deleted successfully"
+          STACK_NAME="erpnext-${{ inputs.environment }}"
+          aws cloudformation delete-stack --stack-name "$STACK_NAME"
+          aws cloudformation wait stack-delete-complete --stack-name "$STACK_NAME"
+          echo "::notice::Stack $STACK_NAME deleted successfully"

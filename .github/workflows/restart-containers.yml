@@ -30,7 +30,7 @@ jobs:
       - name: Run SSM command on EC2
         run: |
           INSTANCE_ID=$(aws ec2 describe-instances \
-            --filters "Name=tag:aws:cloudformation:stack-name,Values=erpnext-poc" \
+            --filters "Name=tag:aws:cloudformation:stack-name,Values=erpnext" \
                       "Name=instance-state-name,Values=running" \
             --query "Reservations[0].Instances[0].InstanceId" \
             --output text --no-cli-pager)

@@ -4,13 +4,21 @@ on:
   push:
     branches:
       - main
-      - deployement-plan
     paths:
-      - 'cloudformation/erpnext-poc.yaml'   # only run when the CF template changes
-  workflow_dispatch:               # allow manual trigger from GitHub UI
+      - 'cloudformation/erpnext.yaml'
+      - 'cloudformation/github-oidc.yaml'
+  workflow_dispatch:
     inputs:
+      environment:
+        description: Target environment
+        required: true
+        default: dev
+        type: choice
+        options:
+          - dev
+          - prod
       action:
-        description: 'Stack action'
+        description: Stack action
         required: true
         default: deploy
         type: choice
@@ -19,94 +27,59 @@ on:
           - validate-only
 
 permissions:
-  id-token: write   # required for OIDC token request
+  id-token: write
   contents: read
-
-env:
-  AWS_REGION: us-east-1
-  STACK_NAME: erpnext-poc
-  TEMPLATE_FILE: cloudformation/erpnext-poc.yaml
 
 jobs:
   deploy:
     name: Deploy CloudFormation Stack
     runs-on: ubuntu-latest
-
+    environment: ${{ inputs.environment || 'dev' }}
+    env:
+      AWS_REGION: us-east-1
+      TEMPLATE_FILE: cloudformation/erpnext.yaml
     steps:
-      # ── 1. Checkout ────────────────────────────────────────────────────────
       - name: Checkout
-        uses: actions/checkout@v6.0.2
+        uses: actions/checkout@v4
 
-      # ── 2. Assume AWS role via OIDC (no stored access keys) ────────────────
+      - name: Set stack name
+        run: echo "STACK_NAME=erpnext-${{ inputs.environment || 'dev' }}" >> $GITHUB_ENV
+
       - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v6.1.2
+        uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
-      # ── 3. Validate template ───────────────────────────────────────────────
       - name: Validate CloudFormation template
         run: |
           aws cloudformation validate-template \
             --template-body file://${{ env.TEMPLATE_FILE }}
-          echo "Template is valid."
 
-      # ── 4. Deploy (create or update stack) ────────────────────────────────
       - name: Deploy stack
-        if: ${{ github.event.inputs.action != 'validate-only' }}
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.action != 'validate-only' }}
         run: |
-          # Build parameter overrides from GitHub Secrets
-          PARAMS=(
-            "ParameterKey=DBPassword,ParameterValue=${{ secrets.DB_PASSWORD }}"
-            "ParameterKey=DBRootPassword,ParameterValue=${{ secrets.DB_ROOT_PASSWORD }}"
-            "ParameterKey=AdminPassword,ParameterValue=${{ secrets.ADMIN_PASSWORD }}"
-            "ParameterKey=KeyPairName,ParameterValue=${{ secrets.KEY_PAIR_NAME }}"
-            "ParameterKey=InstanceType,ParameterValue=t3.micro"
-            "ParameterKey=ERPNextVersion,ParameterValue=v15"
-          )
+          aws cloudformation deploy \
+            --stack-name "$STACK_NAME" \
+            --template-file "${{ env.TEMPLATE_FILE }}" \
+            --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM \
+            --parameter-overrides \
+              Environment=${{ inputs.environment || 'dev' }} \
+              KeyPairName=${{ secrets.KEY_PAIR_NAME }} \
+              AllowedSSHCidr=${{ secrets.ALLOWED_SSH_CIDR }} \
+              ERPNextVersion=v15 \
+              DBPassword=${{ secrets.DB_PASSWORD }} \
+              DBRootPassword=${{ secrets.DB_ROOT_PASSWORD }} \
+              AdminPassword=${{ secrets.ADMIN_PASSWORD }} \
+              NotificationEmail=${{ secrets.NOTIFICATION_EMAIL }} \
+              EnableHTTPS=${{ secrets.ENABLE_HTTPS }} \
+              DomainName=${{ secrets.DOMAIN_NAME }} \
+              AlternateDomainName=${{ secrets.ALTERNATE_DOMAIN_NAME }}
 
-          # Check if stack exists
-          STATUS=$(aws cloudformation describe-stacks \
-            --stack-name ${{ env.STACK_NAME }} \
-            --query 'Stacks[0].StackStatus' \
-            --output text 2>/dev/null || echo "DOES_NOT_EXIST")
-
-          echo "Current stack status: $STATUS"
-
-          if [[ "$STATUS" == "DOES_NOT_EXIST" ]]; then
-            echo "Creating new stack..."
-            aws cloudformation create-stack \
-              --stack-name ${{ env.STACK_NAME }} \
-              --template-body file://${{ env.TEMPLATE_FILE }} \
-              --parameters "${PARAMS[@]}" \
-              --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM \
-              --region ${{ env.AWS_REGION }}
-
-            aws cloudformation wait stack-create-complete \
-              --stack-name ${{ env.STACK_NAME }}
-          else
-            echo "Updating existing stack..."
-            aws cloudformation update-stack \
-              --stack-name ${{ env.STACK_NAME }} \
-              --template-body file://${{ env.TEMPLATE_FILE }} \
-              --parameters "${PARAMS[@]}" \
-              --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM \
-              --region ${{ env.AWS_REGION }} || \
-            (aws cloudformation describe-stacks \
-              --stack-name ${{ env.STACK_NAME }} \
-              --query 'Stacks[0].StackStatus' && \
-             echo "No changes to deploy (stack already up to date).")
-
-            # Wait only if an update was actually triggered
-            aws cloudformation wait stack-update-complete \
-              --stack-name ${{ env.STACK_NAME }} 2>/dev/null || true
-          fi
-
-      # ── 5. Print stack outputs ─────────────────────────────────────────────
       - name: Show stack outputs
-        if: ${{ github.event.inputs.action != 'validate-only' }}
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.action != 'validate-only' }}
         run: |
           aws cloudformation describe-stacks \
-            --stack-name ${{ env.STACK_NAME }} \
+            --stack-name "$STACK_NAME" \
             --query 'Stacks[0].Outputs' \
             --output table

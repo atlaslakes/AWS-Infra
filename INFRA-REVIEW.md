@@ -1,7 +1,7 @@
-# ERPNext on AWS — Design Document (POC)
+# ERPNext on AWS — Design Document
 
 > **Status: APPROVED FOR IMPLEMENTATION**
-> Approach: Option B — EC2 + frappe_docker + RDS + ElastiCache (single-AZ POC)
+> Approach: Option B — EC2 + frappe_docker + RDS + ElastiCache (single-AZ initial deployment)
 
 ---
 
@@ -10,10 +10,10 @@
 | Decision         | Value                                                 |
 | ---------------- | ----------------------------------------------------- |
 | Deployment model | EC2 running `frappe/frappe_docker` (Docker Compose) |
-| Availability     | Single AZ — POC only, no high availability           |
+| Availability     | Single AZ — initial deployment, no high availability |
 | Database         | Amazon RDS for MariaDB (single-AZ)                    |
 | Cache / Queue    | Amazon ElastiCache (Redis, single-node)               |
-| Multi-AZ         | ❌ Not for POC                                        |
+| Multi-AZ         | ❌ Not for initial deployment                        |
 | Estimated cost   | ~$120/mo                                              |
 
 ---
@@ -44,7 +44,7 @@
 
 ---
 
-## AWS Architecture (Single-AZ POC)
+## AWS Architecture (Single-AZ)
 
 ```
 Internet
@@ -108,7 +108,7 @@ Internet
 | Multi-AZ            | No                       |
 | Publicly accessible | No (private subnet only) |
 | Backup retention    | 3 days                   |
-| Deletion protection | No (POC)                 |
+| Deletion protection | No (initial deployment) |
 
 ### ElastiCache (Redis)
 
@@ -127,7 +127,7 @@ Internet
 | ------------- | --------------------------------------- |
 | Purpose       | ERPNext site backups + file attachments |
 | Encryption    | SSE-S3                                  |
-| Versioning    | Disabled (POC)                          |
+| Versioning    | Disabled (initial deployment)           |
 | Public access | Blocked                                 |
 
 ### Security Groups
@@ -144,8 +144,8 @@ Two secrets created by the stack:
 
 | Secret              | Contents                              |
 | ------------------- | ------------------------------------- |
-| `erpnext/poc/db`  | `db_root_password`, `db_password` |
-| `erpnext/poc/app` | `admin_password`                    |
+| `erpnext/db`  | `db_root_password`, `db_password` |
+| `erpnext/app` | `admin_password`                    |
 
 The EC2 UserData script reads these at boot via AWS CLI before starting Docker Compose.
 
@@ -153,10 +153,10 @@ The EC2 UserData script reads these at boot via AWS CLI before starting Docker C
 
 ## CloudFormation Template Structure
 
-Single flat template (no nested stacks — keeps the POC simple):
+Single flat template (no nested stacks — keeps the deployment simple):
 
 ```
-erpnext-poc.yaml 
+erpnext.yaml 
 │
 ├── Parameters
 │   ├── KeyPairName          — EC2 SSH key
@@ -192,7 +192,7 @@ erpnext-poc.yaml
 
 ---
 
-## Estimated Monthly Cost (POC, us-east-1)
+## Estimated Monthly Cost (us-east-1)
 
 | Resource                      | Est. Cost/mo           |
 | ----------------------------- | ---------------------- |
@@ -206,7 +206,7 @@ erpnext-poc.yaml
 
 ---
 
-## Not Included in POC (add for production)
+## Not Included (add for production)
 
 - Multi-AZ RDS + ElastiCache
 - Application Load Balancer + ACM TLS certificate

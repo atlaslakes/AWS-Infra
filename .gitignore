@@ -1,12 +1,13 @@
-# Secrets & credentials — never commit
+# Secrets & credentials
 .env
 .env.*
 !.env.example
-erpnext-poc.env
-erpnext-poc.env.*
-!erpnext-poc.env.example
+!.env.template
+erpnext.env
+erpnext.env.*
+!erpnext.env.example
 
-# AWS CLI config (contains credentials)
+# AWS CLI config
 .aws/
 
 # Terraform state & secrets
@@ -16,6 +17,10 @@ erpnext-poc.env.*
 !*.tfvars.example
 .terraform/
 .terraform.lock.hcl
+
+# Python / caches
+__pycache__/
+*.pyc
 
 # OS
 .DS_Store

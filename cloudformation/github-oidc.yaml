@@ -1,10 +1,9 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Description: >
-  One-time bootstrap: creates the GitHub Actions OIDC provider and IAM role
-  so GitHub Actions can deploy the erpnext-poc stack without long-lived AWS keys.
-  Deploy this ONCE manually before the GitHub Actions workflow runs.
+  One-time bootstrap: creates the GitHub Actions OIDC IAM role so GitHub Actions
+  can deploy the ERPNext CloudFormation stacks without long-lived AWS keys.
 
-Parameters: 
+Parameters:
   GitHubOrg:
     Type: String
     Default: atlaslakes
@@ -21,15 +20,11 @@ Parameters:
     Description: Branch that is allowed to assume the deploy role.
 
 Resources:
-
-  # ── IAM role GitHub Actions assumes ─────────────────────────────────────────
-  # NOTE: The GitHub OIDC provider (token.actions.githubusercontent.com) already
-  # exists in this AWS account. We reference it by its well-known ARN directly.
   GitHubActionsDeployRole:
     Type: AWS::IAM::Role
     Properties:
       RoleName: GitHubActions-ERPNext-Deploy
-      Description: Assumed by GitHub Actions to deploy the erpnext-poc CloudFormation stack.
+      Description: Assumed by GitHub Actions to deploy the ERPNext CloudFormation stacks.
       MaxSessionDuration: 3600
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
@@ -42,19 +37,13 @@ Resources:
               StringEquals:
                 token.actions.githubusercontent.com:aud: sts.amazonaws.com
               StringLike:
-                # Allows pushes from any branch/tag on this repo.
-                # Tighten to a specific branch if desired:
-                #   token.actions.githubusercontent.com:sub: !Sub repo:${GitHubOrg}/${GitHubRepo}:ref:refs/heads/${GitHubBranch}
                 token.actions.githubusercontent.com:sub:
                   !Sub repo:${GitHubOrg}/${GitHubRepo}:*
-
       Policies:
         - PolicyName: ERPNextDeployPolicy
           PolicyDocument:
             Version: '2012-10-17'
             Statement:
-
-              # CloudFormation — account-level actions (no specific stack ARN)
               - Sid: CloudFormationGlobal
                 Effect: Allow
                 Action:
@@ -62,7 +51,6 @@ Resources:
                   - cloudformation:ListStacks
                 Resource: "*"
 
-              # CloudFormation — full control over the erpnext-poc stack
               - Sid: CloudFormation
                 Effect: Allow
                 Action:
@@ -74,39 +62,41 @@ Resources:
                   - cloudformation:DescribeStackResources
                   - cloudformation:GetTemplate
                   - cloudformation:ListStackResources
-                Resource: !Sub arn:aws:cloudformation:*:${AWS::AccountId}:stack/erpnext-poc/*
+                Resource:
+                  - !Sub arn:aws:cloudformation:*:${AWS::AccountId}:stack/erpnext-dev/*
+                  - !Sub arn:aws:cloudformation:*:${AWS::AccountId}:stack/erpnext-prod/*
+                  - !Sub arn:aws:cloudformation:*:${AWS::AccountId}:stack/github-oidc-erpnext/*
 
-              # EC2 resources the stack creates
               - Sid: EC2
                 Effect: Allow
                 Action:
                   - ec2:*
                 Resource: "*"
 
-              # RDS
               - Sid: RDS
                 Effect: Allow
                 Action:
                   - rds:*
                 Resource: "*"
 
-              # ElastiCache
               - Sid: ElastiCache
                 Effect: Allow
                 Action:
                   - elasticache:*
                 Resource: "*"
 
-              # S3 (bucket creation, policy, objects)
               - Sid: S3
                 Effect: Allow
                 Action:
                   - s3:*
                 Resource:
-                  - !Sub arn:aws:s3:::erpnext-poc-*
-                  - !Sub arn:aws:s3:::erpnext-poc-*/*
+                  - !Sub arn:aws:s3:::erpnext-dev-*
+                  - !Sub arn:aws:s3:::erpnext-dev-*/*
+                  - !Sub arn:aws:s3:::erpnext-prod-*
+                  - !Sub arn:aws:s3:::erpnext-prod-*/*
+                  - !Sub arn:aws:s3:::erpnext-*
+                  - !Sub arn:aws:s3:::erpnext-*/*
 
-              # Secrets Manager
               - Sid: SecretsManager
                 Effect: Allow
                 Action:
@@ -119,7 +109,6 @@ Resources:
                   - secretsmanager:TagResource
                 Resource: !Sub arn:aws:secretsmanager:*:${AWS::AccountId}:secret:*Secret*
 
-              # SSM — Parameter Store + send commands to EC2
               - Sid: SSM
                 Effect: Allow
                 Action:
@@ -131,7 +120,28 @@ Resources:
                   - ssm:DescribeInstanceInformation
                 Resource: "*"
 
-              # IAM — CloudFormation needs to create/pass roles for EC2 instance profile
+              - Sid: CloudFront
+                Effect: Allow
+                Action:
+                  - cloudfront:CreateDistribution
+                  - cloudfront:UpdateDistribution
+                  - cloudfront:DeleteDistribution
+                  - cloudfront:GetDistribution
+                  - cloudfront:GetDistributionConfig
+                  - cloudfront:TagResource
+                  - cloudfront:ListDistributions
+                Resource: "*"
+
+              - Sid: ACM
+                Effect: Allow
+                Action:
+                  - acm:RequestCertificate
+                  - acm:DescribeCertificate
+                  - acm:DeleteCertificate
+                  - acm:ListCertificates
+                  - acm:AddTagsToCertificate
+                Resource: "*"
+
               - Sid: IAMPassRole
                 Effect: Allow
                 Action:
@@ -153,9 +163,9 @@ Resources:
 
 Outputs:
   RoleArn:
-    Description: ARN of the GitHub Actions deploy role — paste this into GitHub repo settings.
+    Description: ARN of the GitHub Actions deploy role.
     Value: !GetAtt GitHubActionsDeployRole.Arn
 
   OIDCProviderArn:
-    Description: Existing GitHub OIDC provider ARN (already in account).
+    Description: Existing GitHub OIDC provider ARN.
     Value: !Sub arn:aws:iam::${AWS::AccountId}:oidc-provider/token.actions.githubusercontent.com

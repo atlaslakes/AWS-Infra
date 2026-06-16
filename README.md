@@ -1,58 +1,38 @@
 # AWS-Infra
 
-CloudFormation infrastructure for ERPNext POC on AWS.
-
-## Guides
-
-- [ERPNext Dashboard Customization Guide](DASHBOARD-CUSTOMIZATION-GUIDE.md)
-
-## Dashboard Assets
-
-- `configuration/erpnext-item-uniqueness-server-script.py`
-- `configuration/dashboard-report-queries.sql`
+CloudFormation infrastructure for ERPNext on AWS.
 
 ## Template
 
-- `erpnext-poc.yaml`
+- [cloudformation/erpnext.yaml](cloudformation/erpnext.yaml)
+- [cloudformation/github-oidc.yaml](cloudformation/github-oidc.yaml)
 
-## What It Provisions
+## Local Deploy
 
-- VPC, public subnet, and private subnets
-- EC2 (`t3.medium` by default) with UserData bootstrap for `frappe_docker`
-- RDS MariaDB 10.6 (`db.t3.micro`, single-AZ)
-- 2x ElastiCache Redis 7 single-node clusters (`cache.t3.micro`)
-- S3 bucket for files/backups
-- IAM role/profile for EC2 (Secrets Manager + S3 access)
-- Elastic IP and security groups
-
-## Deploy
-
-Safer local workflow:
-
-1. Copy [erpnext-poc.env.example](erpnext-poc.env.example) to `erpnext-poc.env`.
-2. Fill in the real values locally.
-3. Run `./deploy.ps1` from PowerShell.
+1. Copy `.env.template` to `.env` and fill in all values.
+2. Source the file and deploy.
 
 ```bash
-aws cloudformation deploy \
-	--stack-name erpnext-poc \
-	--template-file erpnext-poc.yaml \
-	--capabilities CAPABILITY_NAMED_IAM \
-	--parameter-overrides \
-		KeyPairName=<your-keypair-name> \
-		AllowedSSHCidr=<your-public-ip>/32 \
-		ERPNextVersion=v15 \
-		DBPassword=<strong-db-password> \
-		DBRootPassword=<strong-root-password> \
-		AdminPassword=<strong-admin-password>
+source .env && aws cloudformation deploy \
+  --stack-name erpnext-${ENVIRONMENT} \
+  --template-file cloudformation/erpnext.yaml \
+  --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM \
+  --parameter-overrides \
+    Environment=$ENVIRONMENT \
+    KeyPairName=$KEY_PAIR_NAME \
+    AllowedSSHCidr=$ALLOWED_SSH_CIDR \
+    ERPNextVersion=$ERPNEXT_VERSION \
+    DBPassword=$DB_PASSWORD \
+    DBRootPassword=$DB_ROOT_PASSWORD \
+    AdminPassword=$ADMIN_PASSWORD \
+    EnableHTTPS=$ENABLE_HTTPS \
+    DomainName=$DOMAIN_NAME \
+    AlternateDomainName=$ALTERNATE_DOMAIN_NAME \
+    NotificationEmail=$NOTIFICATION_EMAIL
 ```
 
-The PowerShell script uses the env file so you do not have to paste secrets into the command line.
+## Notes
 
-The architecture diagram shows a `t3.medium` EC2 host, but this AWS account currently rejects that size change during stack updates. Keep `INSTANCE_TYPE=t3.micro` here unless you are deploying in an account that allows `t3.medium`.
-
-## Validate First
-
-```bash
-aws cloudformation validate-template --template-body file://erpnext-poc.yaml
-```
+- The CloudFront distribution fronts the EC2 origin for HTTPS and custom domains.
+- DNS validation records for ACM must be added manually in GoDaddy.
+- The local `.env` file is intentionally ignored by git.

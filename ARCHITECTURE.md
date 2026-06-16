@@ -1,9 +1,9 @@
 # AWS Infrastructure Architecture Overview
 
-**Project**: ERPNext on AWS — POC Deployment  
+**Project**: ERPNext on AWS
 **Stack**: CloudFormation + GitHub Actions + Docker Compose  
 **Region**: us-east-1  
-**Status**: Production POC (approved for implementation)
+**Status**: Production
 
 ---
 
@@ -124,7 +124,7 @@ Both run on cache.t3.micro nodes in the private subnet.
 
 ### Storage
 
-**S3 Bucket** (auto-named: `erpnext-poc-erpnextbucket-xxx`)
+**S3 Bucket** (auto-named: `erpnext-erpnextbucket-xxx`)
 - Server-side encryption (SSE-S3)
 - Versioning enabled
 - All public access blocked
@@ -247,8 +247,8 @@ The frontend container connects to the externally-managed RDS and ElastiCache cl
 
 | Decision | Rationale |
 |---|---|
-| Single-AZ POC | Simplicity + cost; clear upgrade path to multi-AZ for production |
-| EC2 + Docker Compose (not ECS/EKS) | Easiest frappe_docker deployment pattern; avoids container orchestration complexity for POC |
+| Single-AZ initial deployment | Simplicity + cost; clear upgrade path to multi-AZ for production |
+| EC2 + Docker Compose (not ECS/EKS) | Easiest frappe_docker deployment pattern; avoids container orchestration complexity for initial deployment |
 | External RDS + ElastiCache | Data durability and managed backups without container-volume risk |
 | Secrets Manager (not Parameter Store) | Passwords never touch CloudFormation parameters or disk |
 | GitHub OIDC (no stored AWS keys) | Eliminates long-lived credential risk in GitHub |
@@ -257,7 +257,7 @@ The frontend container connects to the externally-managed RDS and ElastiCache cl
 
 ---
 
-## Estimated Monthly Cost (POC)
+## Estimated Monthly Cost
 
 | Resource | Est. Cost |
 |---|---|
@@ -286,7 +286,7 @@ Covers: Chart of accounts, item master sync, warehouse mapping, customer/supplie
 ```
 AWS-Infra/
 ├── cloudformation/
-│   ├── erpnext-poc.yaml      Main infrastructure stack (VPC, EC2, RDS, Redis, S3, IAM, CloudWatch)
+│   ├── erpnext.yaml          Main infrastructure stack (VPC, EC2, RDS, Redis, S3, IAM, CloudWatch)
 │   └── github-oidc.yaml      One-time OIDC federation setup for GitHub Actions
 ├── .github/workflows/        19 GitHub Actions workflows (infra + ops + ERPNext API)
 ├── configuration/            SSM document library (100+ JSON docs for remote ops)
