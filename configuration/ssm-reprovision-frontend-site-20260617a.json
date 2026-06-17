@@ -1,0 +1,12 @@
+{
+  "DocumentName": "AWS-RunShellScript",
+  "InstanceIds": ["i-0baea513db2b15557"],
+  "Parameters": {
+    "commands": [
+      "set -euxo pipefail",
+      "docker exec frappe_docker-backend-1 bash -lc 'set -euo pipefail; DB_HOST=$(awk -F\"\\\"\" \"/\\\"db_host\\\"/ {print \\\$4}\" /home/frappe/frappe-bench/sites/common_site_config.json | head -n1); DB_PORT=$(awk -F\"[,: ]+\" \"/\\\"db_port\\\"/ {gsub(/,/,\"\",\\\$3); print \\\$3}\" /home/frappe/frappe-bench/sites/common_site_config.json | head -n1); DB_PORT=${DB_PORT:-3306}; echo DB_HOST=$DB_HOST DB_PORT=$DB_PORT; mysql -h \"$DB_HOST\" -P \"$DB_PORT\" -u erpnext -p\"AtlasLakesAws123!\" -e \"DROP DATABASE IF EXISTS _bcb022432d4a5aae; FLUSH PRIVILEGES;\"; rm -rf /home/frappe/frappe-bench/sites/frontend; bench new-site frontend --mariadb-user-host-login-scope=% --admin-password=AdminAtlasLakes123! --db-root-username=erpnext --db-root-password=AtlasLakesAws123! --db-name _bcb022432d4a5aae --db-password FrontDbPass2026! --install-app erpnext --set-default; bench --site frontend set-config host_name http://44.198.225.186; printf frontend > /home/frappe/frappe-bench/sites/currentsite.txt; ln -sfn frontend /home/frappe/frappe-bench/sites/44.198.225.186'",
+      "docker restart frappe_docker-backend-1 frappe_docker-frontend-1",
+      "curl -sS -I --max-time 25 http://44.198.225.186"
+    ]
+  }
+}

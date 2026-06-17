@@ -1,0 +1,33 @@
+{
+  "DocumentName": "AWS-RunShellScript",
+  "InstanceIds": ["i-0baea513db2b15557"],
+  "Parameters": {
+    "commands": [
+      "set -euo pipefail",
+      "docker ps --format 'table {{.Names}}\\t{{.Status}}'",
+      "SITE_JSON=$(docker exec frappe_docker-backend-1 cat /home/frappe/frappe-bench/sites/frontend/site_config.json)",
+      "COMMON_JSON=$(docker exec frappe_docker-backend-1 cat /home/frappe/frappe-bench/sites/common_site_config.json)",
+      "DB_HOST=$(echo \"$COMMON_JSON\" | jq -r '.db_host')",
+      "DB_PORT=$(echo \"$COMMON_JSON\" | jq -r '.db_port // 3306')",
+      "DB_NAME=$(echo \"$SITE_JSON\" | jq -r '.db_name')",
+      "DB_USER=$(echo \"$SITE_JSON\" | jq -r '.db_user // .db_name')",
+      "DB_PASS=$(echo \"$SITE_JSON\" | jq -r '.db_password')",
+      "ROOT_USER=erpnext",
+      "ROOT_PASS=AtlasLakesAws123!",
+      "echo DB_HOST=$DB_HOST DB_PORT=$DB_PORT DB_NAME=$DB_NAME DB_USER=$DB_USER",
+      "docker exec frappe_docker-backend-1 sh -lc \"mysql -h '$DB_HOST' -P '$DB_PORT' -u '$ROOT_USER' -p'$ROOT_PASS' -e \\\"CREATE USER IF NOT EXISTS '$DB_USER'@'%' IDENTIFIED BY '$DB_PASS'; ALTER USER '$DB_USER'@'%' IDENTIFIED BY '$DB_PASS'; CREATE DATABASE IF NOT EXISTS $DB_NAME CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci; GRANT ALL PRIVILEGES ON $DB_NAME.* TO '$DB_USER'@'%'; FLUSH PRIVILEGES;\\\"\"",
+      "docker exec frappe_docker-backend-1 bash -lc \"bench --site frontend install-app erpnext || true\"",
+      "docker exec frappe_docker-backend-1 bash -lc \"bench --site frontend migrate || true\"",
+      "docker exec frappe_docker-backend-1 bash -lc \"bench --site frontend list-apps || true\"",
+      "docker exec frappe_docker-backend-1 bash -lc \"bench use frontend\"",
+      "docker exec frappe_docker-backend-1 bash -lc \"bench set-config -g host_name http://44.198.225.186\"",
+      "docker exec frappe_docker-backend-1 bash -lc \"bench --site frontend set-config host_name http://44.198.225.186\"",
+      "docker exec frappe_docker-backend-1 sh -lc \"printf frontend > /home/frappe/frappe-bench/sites/currentsite.txt && ln -sfn frontend /home/frappe/frappe-bench/sites/44.198.225.186\"",
+      "docker restart frappe_docker-frontend-1 frappe_docker-backend-1",
+      "sleep 10",
+      "curl -I --max-time 20 http://127.0.0.1:80 || true",
+      "curl -I --max-time 20 http://44.198.225.186 || true",
+      "docker logs --tail 120 frappe_docker-backend-1 || true"
+    ]
+  }
+}

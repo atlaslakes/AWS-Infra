@@ -1,0 +1,13 @@
+{
+  "DocumentName": "AWS-RunShellScript",
+  "InstanceIds": ["i-0baea513db2b15557"],
+  "Parameters": {
+    "commands": [
+      "set -euxo pipefail",
+      "docker exec frappe_docker-backend-1 bash -lc 'python - <<\"PY\"\nimport json\nimport pymysql\n\nsite_cfg_path = \"/home/frappe/frappe-bench/sites/frontend/site_config.json\"\nwith open(site_cfg_path, \"r\", encoding=\"utf-8\") as f:\n    cfg = json.load(f)\n\ndb_host = cfg[\"db_host\"]\ndb_port = int(cfg.get(\"db_port\", 3306))\ndb_name = cfg[\"db_name\"]\ndb_user = cfg[\"db_user\"]\ndb_password = cfg[\"db_password\"]\n\nroot_user = \"erpnext\"\nroot_password = \"AtlasLakesAws123!\"\n\nconn = pymysql.connect(host=db_host, port=db_port, user=root_user, password=root_password, autocommit=True)\ncur = conn.cursor()\ncur.execute(f\"CREATE DATABASE IF NOT EXISTS `{db_name}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci\")\ncur.execute(f\"CREATE USER IF NOT EXISTS `{db_user}`@'%' IDENTIFIED BY %s\", (db_password,))\ncur.execute(f\"ALTER USER `{db_user}`@'%' IDENTIFIED BY %s\", (db_password,))\ncur.execute(f\"GRANT ALL PRIVILEGES ON `{db_name}`.* TO `{db_user}`@'%'\")\ncur.execute(\"FLUSH PRIVILEGES\")\ncur.close()\nconn.close()\nprint(\"DB grants repaired for frontend site user\")\nPY'",
+      "docker exec frappe_docker-backend-1 bash -lc 'bench --site frontend migrate'",
+      "docker restart frappe_docker-backend-1 frappe_docker-frontend-1",
+      "curl -sS -I --max-time 20 http://44.198.225.186"
+    ]
+  }
+}

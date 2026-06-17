@@ -1,0 +1,17 @@
+{
+  "DocumentName": "AWS-RunShellScript",
+  "InstanceIds": ["i-0baea513db2b15557"],
+  "Parameters": {
+    "commands": [
+      "set -euxo pipefail",
+      "cd /home/ubuntu/frappe_docker",
+      "SITE=$(docker exec frappe_docker-backend-1 bash -lc 'ls -1 /home/frappe/frappe-bench/sites | grep -vE \"^(assets|apps.txt|common_site_config.json)$\" | head -n1')",
+      "echo SITE=$SITE",
+      "docker exec frappe_docker-backend-1 bash -lc 'bench --site \"'$SITE'\" set-config -g host_name http://44.198.225.186'",
+      "docker exec frappe_docker-backend-1 bash -lc 'bench --site \"'$SITE'\" add-domain 44.198.225.186 || true'",
+      "docker exec frappe_docker-backend-1 bash -lc 'bench --site \"'$SITE'\" migrate'",
+      "docker restart frappe_docker-frontend-1",
+      "curl -sS -I --max-time 15 http://127.0.0.1:80"
+    ]
+  }
+}

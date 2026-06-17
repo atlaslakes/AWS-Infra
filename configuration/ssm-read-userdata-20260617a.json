@@ -1,0 +1,10 @@
+{
+  "DocumentName": "AWS-RunShellScript",
+  "InstanceIds": ["i-0baea513db2b15557"],
+  "Parameters": {
+    "commands": [
+      "set -euxo pipefail",
+      "cat /var/lib/cloud/instance/scripts/part-001"
+    ]
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "DocumentName": "AWS-RunShellScript",
+  "InstanceIds": ["i-0baea513db2b15557"],
+  "Parameters": {
+    "commands": [
+      "set -euxo pipefail",
+      "curl -sS -o /tmp/erp-home.out -w '%{http_code}' -H 'Host: 44.198.225.186' http://127.0.0.1:80 || true",
+      "echo",
+      "docker logs --tail 250 frappe_docker-backend-1",
+      "docker exec frappe_docker-backend-1 bash -lc 'ls -la /home/frappe/frappe-bench/sites/frontend'",
+      "docker exec frappe_docker-backend-1 bash -lc 'cat /home/frappe/frappe-bench/sites/frontend/site_config.json'",
+      "docker exec frappe_docker-backend-1 bash -lc 'bench --site frontend list-apps || true'",
+      "docker exec frappe_docker-backend-1 bash -lc 'bench --site frontend migrate || true'"
+    ]
+  }
+}

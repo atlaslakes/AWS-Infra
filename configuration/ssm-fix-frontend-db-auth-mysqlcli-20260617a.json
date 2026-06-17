@@ -1,0 +1,16 @@
+{
+  "DocumentName": "AWS-RunShellScript",
+  "InstanceIds": ["i-0baea513db2b15557"],
+  "Parameters": {
+    "commands": [
+      "set -euxo pipefail",
+      "docker exec frappe_docker-backend-1 bash -lc 'python - <<\"PY\"\nimport json\nwith open(\"/home/frappe/frappe-bench/sites/frontend/site_config.json\", \"r\", encoding=\"utf-8\") as f:\n    c = json.load(f)\nprint(c.get(\"db_host\", \"\"))\nprint(str(c.get(\"db_port\", 3306)))\nprint(c.get(\"db_name\", \"\"))\nprint(c.get(\"db_user\", \"\"))\nprint(c.get(\"db_password\", \"\"))\nPY' > /tmp/frontend-db-vars.txt",
+      "DB_HOST=$(sed -n '1p' /tmp/frontend-db-vars.txt) && DB_PORT=$(sed -n '2p' /tmp/frontend-db-vars.txt) && DB_NAME=$(sed -n '3p' /tmp/frontend-db-vars.txt) && DB_USER=$(sed -n '4p' /tmp/frontend-db-vars.txt) && DB_PASS=$(sed -n '5p' /tmp/frontend-db-vars.txt)",
+      "echo DB_HOST=$DB_HOST DB_PORT=$DB_PORT DB_NAME=$DB_NAME DB_USER=$DB_USER",
+      "docker exec -e DB_HOST=\"$DB_HOST\" -e DB_PORT=\"$DB_PORT\" -e DB_NAME=\"$DB_NAME\" -e DB_USER=\"$DB_USER\" -e DB_PASS=\"$DB_PASS\" frappe_docker-backend-1 bash -lc 'mysql --version; mysql -h \"$DB_HOST\" -P \"$DB_PORT\" -u erpnext -p\"AtlasLakesAws123!\" -e \"CREATE DATABASE IF NOT EXISTS \\\\`$DB_NAME\\\\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci; CREATE USER IF NOT EXISTS \\\\`$DB_USER\\\\`@\\\\`%\\\\` IDENTIFIED BY \\\\'$DB_PASS\\\\'; ALTER USER \\\\`$DB_USER\\\\`@\\\\`%\\\\` IDENTIFIED BY \\\\'$DB_PASS\\\\'; GRANT ALL PRIVILEGES ON \\\\`$DB_NAME\\\\`.* TO \\\\`$DB_USER\\\\`@\\\\`%\\\\`; FLUSH PRIVILEGES;\"'",
+      "docker exec frappe_docker-backend-1 bash -lc 'bench --site frontend migrate'",
+      "docker restart frappe_docker-backend-1 frappe_docker-frontend-1",
+      "curl -sS -I --max-time 20 http://44.198.225.186"
+    ]
+  }
+}

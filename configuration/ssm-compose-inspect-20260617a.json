@@ -1,0 +1,20 @@
+{
+  "DocumentName": "AWS-RunShellScript",
+  "InstanceIds": ["i-0baea513db2b15557"],
+  "Parameters": {
+    "commands": [
+      "set -euxo pipefail",
+      "cd /opt/erpnext/frappe_docker",
+      "pwd",
+      "ls -la",
+      "echo '--- .env ---'",
+      "cat .env || true",
+      "echo '--- compose image refs ---'",
+      "grep -nE 'image:|FRAPPE_VERSION|ERPNEXT_VERSION' pwd.yml compose.yaml docker-compose.yml 2>/dev/null || true",
+      "echo '--- create-site logs ---'",
+      "docker logs --tail 250 frappe_docker-create-site-1 || true",
+      "echo '--- backend apps.txt ---'",
+      "docker exec frappe_docker-backend-1 sh -lc 'cat /home/frappe/frappe-bench/sites/frontend/apps.txt 2>/dev/null || true'"
+    ]
+  }
+}

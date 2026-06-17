@@ -1,0 +1,11 @@
+{
+  "DocumentName": "AWS-RunShellScript",
+  "InstanceIds": ["i-0baea513db2b15557"],
+  "Parameters": {
+    "commands": [
+      "set -euxo pipefail",
+      "find /home /opt -maxdepth 4 -type f \\( -name 'compose.yaml' -o -name 'pwd.yml' \\) 2>/dev/null | sed -n '1,80p'",
+      "docker inspect frappe_docker-backend-1 --format '{{json .Config.Labels}}' || true"
+    ]
+  }
+}

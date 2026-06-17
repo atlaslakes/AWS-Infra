@@ -106,10 +106,10 @@ Mappings:
       DBAllocatedStorage: '20'
       CacheNodeType: cache.t3.micro
     prod:
-      InstanceType: t3.large
-      DBInstanceClass: db.t3.medium
+      InstanceType: t3.micro
+      DBInstanceClass: db.t3.micro
       DBAllocatedStorage: '100'
-      CacheNodeType: cache.t3.medium
+      CacheNodeType: cache.t3.micro
 
 Conditions:
   IsProd: !Equals [!Ref Environment, prod]
@@ -359,8 +359,8 @@ Resources:
       MasterUserPassword: !Ref DBPassword
       DBName: erpnext
       PubliclyAccessible: false
-      MultiAZ: !If [IsProd, true, false]
-      BackupRetentionPeriod: !If [IsProd, 7, 1]
+      MultiAZ: false
+      BackupRetentionPeriod: 1
       DeletionProtection: !If [IsProd, true, false]
       VPCSecurityGroups:
         - !Ref RDSSecurityGroup

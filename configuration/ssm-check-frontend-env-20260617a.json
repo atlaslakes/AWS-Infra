@@ -1,0 +1,11 @@
+{
+  "DocumentName": "AWS-RunShellScript",
+  "InstanceIds": ["i-0baea513db2b15557"],
+  "Parameters": {
+    "commands": [
+      "set -euxo pipefail",
+      "docker inspect frappe_docker-frontend-1 --format '{{range .Config.Env}}{{println .}}{{end}}' | grep -E 'FRAPPE_SITE_NAME_HEADER|BACKEND|SOCKETIO'",
+      "docker exec frappe_docker-frontend-1 sh -lc 'sed -n \"1,160p\" /etc/nginx/conf.d/frappe.conf'"
+    ]
+  }
+}

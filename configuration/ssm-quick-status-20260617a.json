@@ -1,0 +1,13 @@
+{
+  "DocumentName": "AWS-RunShellScript",
+  "InstanceIds": ["i-0baea513db2b15557"],
+  "Parameters": {
+    "commands": [
+      "set -euxo pipefail",
+      "docker ps -a --format 'table {{.Names}}\\t{{.Image}}\\t{{.Status}}'",
+      "docker logs --tail 120 frappe_docker-backend-1 || true",
+      "docker logs --tail 120 frappe_docker-create-site-1 || true",
+      "docker exec frappe_docker-backend-1 sh -lc 'cat /home/frappe/frappe-bench/sites/frontend/apps.txt 2>/dev/null || true'"
+    ]
+  }
+}

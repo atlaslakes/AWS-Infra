@@ -1,0 +1,17 @@
+{
+  "DocumentName": "AWS-RunShellScript",
+  "InstanceIds": ["i-0baea513db2b15557"],
+  "Parameters": {
+    "commands": [
+      "set -euxo pipefail",
+      "uname -a",
+      "cat /etc/os-release || true",
+      "which docker || true",
+      "which docker-compose || true",
+      "systemctl is-active docker || true",
+      "ls -la /var/lib/cloud/instance/scripts || true",
+      "tail -n 200 /var/log/cloud-init-output.log || true",
+      "tail -n 200 /var/log/cloud-init.log || true"
+    ]
+  }
+}

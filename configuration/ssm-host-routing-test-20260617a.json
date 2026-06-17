@@ -1,0 +1,15 @@
+{
+  "DocumentName": "AWS-RunShellScript",
+  "InstanceIds": ["i-0baea513db2b15557"],
+  "Parameters": {
+    "commands": [
+      "set -euxo pipefail",
+      "docker exec frappe_docker-backend-1 bash -lc 'echo APPS_TXT:; cat /home/frappe/frappe-bench/sites/apps.txt; echo; echo FRONTEND_APPS:; cat /home/frappe/frappe-bench/sites/frontend/apps.txt'",
+      "curl -sS -I -H 'Host: frontend' --max-time 15 http://127.0.0.1:80 || true",
+      "curl -sS -I -H 'Host: 44.198.225.186' --max-time 15 http://127.0.0.1:80 || true",
+      "curl -sS -I --max-time 15 http://127.0.0.1:80 || true",
+      "docker logs --tail 80 frappe_docker-frontend-1 || true",
+      "docker logs --tail 80 frappe_docker-backend-1 || true"
+    ]
+  }
+}

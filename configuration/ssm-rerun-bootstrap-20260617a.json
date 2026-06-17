@@ -1,0 +1,12 @@
+{
+  "DocumentName": "AWS-RunShellScript",
+  "InstanceIds": ["i-0baea513db2b15557"],
+  "Parameters": {
+    "commands": [
+      "set -euxo pipefail",
+      "cp /var/lib/cloud/instance/scripts/part-001 /tmp/erpnext-bootstrap-rerun.sh",
+      "sed -i \"s/dnf install -y docker git jq awscli curl/dnf install -y docker git jq awscli --allowerasing/\" /tmp/erpnext-bootstrap-rerun.sh",
+      "bash /tmp/erpnext-bootstrap-rerun.sh"
+    ]
+  }
+}

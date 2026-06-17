@@ -1,0 +1,12 @@
+{
+  "DocumentName": "AWS-RunShellScript",
+  "InstanceIds": ["i-0baea513db2b15557"],
+  "Parameters": {
+    "commands": [
+      "set -euxo pipefail",
+      "docker exec frappe_docker-backend-1 bash -lc 'set -euo pipefail; python - <<\"PY\"\nimport json\nimport shlex\nfrom pathlib import Path\n\nsite_path = Path(\"/home/frappe/frappe-bench/sites/frontend/site_config.json\")\ncommon_path = Path(\"/home/frappe/frappe-bench/sites/common_site_config.json\")\n\nsite = json.loads(site_path.read_text(encoding=\"utf-8\"))\ncommon = json.loads(common_path.read_text(encoding=\"utf-8\"))\n\nsite[\"db_host\"] = common[\"db_host\"]\nsite[\"db_port\"] = int(common.get(\"db_port\", 3306))\nsite[\"db_type\"] = \"mariadb\"\nsite[\"db_password\"] = \"FrontDbPass2026!\"\n\nsite_path.write_text(json.dumps(site, indent=1) + \"\\n\", encoding=\"utf-8\")\n\nenv_lines = [\n    f\"export DB_HOST={shlex.quote(str(site['db_host']))}\",\n    f\"export DB_PORT={shlex.quote(str(site.get('db_port', 3306)))}\",\n    f\"export DB_NAME={shlex.quote(str(site['db_name']))}\",\n    f\"export DB_USER={shlex.quote(str(site['db_user']))}\",\n    f\"export DB_PASS={shlex.quote(str(site['db_password']))}\",\n]\nPath(\"/tmp/frontend_db.env\").write_text(\"\\n\".join(env_lines) + \"\\n\", encoding=\"utf-8\")\nprint(\"Prepared frontend DB config and /tmp/frontend_db.env\")\nPY; source /tmp/frontend_db.env; echo DB_HOST=$DB_HOST DB_PORT=$DB_PORT DB_NAME=$DB_NAME DB_USER=$DB_USER; mysql -h \"$DB_HOST\" -P \"$DB_PORT\" -u erpnext -p\"AtlasLakesAws123!\" -e \"CREATE DATABASE IF NOT EXISTS \\\`$DB_NAME\\\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;\"; mysql -h \"$DB_HOST\" -P \"$DB_PORT\" -u erpnext -p\"AtlasLakesAws123!\" -e \"CREATE USER IF NOT EXISTS '$DB_USER'@'%' IDENTIFIED BY '$DB_PASS';\"; mysql -h \"$DB_HOST\" -P \"$DB_PORT\" -u erpnext -p\"AtlasLakesAws123!\" -e \"ALTER USER '$DB_USER'@'%' IDENTIFIED BY '$DB_PASS';\"; mysql -h \"$DB_HOST\" -P \"$DB_PORT\" -u erpnext -p\"AtlasLakesAws123!\" -e \"GRANT ALL PRIVILEGES ON \\\`$DB_NAME\\\`.* TO '$DB_USER'@'%'; FLUSH PRIVILEGES;\"; bench --site frontend migrate'",
+      "docker restart frappe_docker-backend-1 frappe_docker-frontend-1",
+      "curl -sS -I --max-time 25 http://44.198.225.186"
+    ]
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "DocumentName": "AWS-RunShellScript",
+  "InstanceIds": ["i-0baea513db2b15557"],
+  "Parameters": {
+    "commands": [
+      "set -euxo pipefail",
+      "docker exec frappe_docker-backend-1 bash -lc 'bench set-config -g host_name http://44.198.225.186'",
+      "docker exec frappe_docker-backend-1 bash -lc 'bench set-config -g serve_default_site true'",
+      "docker exec frappe_docker-backend-1 bash -lc 'bench set-config -g default_site frontend'",
+      "docker exec frappe_docker-backend-1 bash -lc 'bench --site frontend set-config host_name http://44.198.225.186'",
+      "docker exec frappe_docker-backend-1 bash -lc 'printf frontend > /home/frappe/frappe-bench/sites/currentsite.txt'",
+      "docker restart frappe_docker-backend-1 frappe_docker-frontend-1",
+      "for i in 1 2 3 4 5; do curl -sS -I -H 'Host: 44.198.225.186' --max-time 10 http://127.0.0.1:80 && break || true; done",
+      "curl -sS -I -H 'Host: 44.198.225.186' --max-time 20 http://127.0.0.1:80",
+      "curl -sS -I --max-time 20 http://127.0.0.1:80"
+    ]
+  }
+}

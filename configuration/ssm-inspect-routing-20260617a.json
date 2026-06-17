@@ -1,0 +1,13 @@
+{
+  "DocumentName": "AWS-RunShellScript",
+  "InstanceIds": ["i-0baea513db2b15557"],
+  "Parameters": {
+    "commands": [
+      "set -euxo pipefail",
+      "docker exec frappe_docker-frontend-1 sh -lc 'grep -R \"FRAPPE_SITE_NAME_HEADER\\|server_name\\|sites\" -n /etc/nginx/conf.d /etc/nginx/templates 2>/dev/null | sed -n \"1,200p\"'",
+      "docker exec frappe_docker-frontend-1 sh -lc 'cat /etc/nginx/conf.d/default.conf 2>/dev/null || true'",
+      "docker exec frappe_docker-backend-1 bash -lc 'cat /home/frappe/frappe-bench/sites/frontend/site_config.json'",
+      "docker exec frappe_docker-backend-1 bash -lc 'cat /home/frappe/frappe-bench/sites/common_site_config.json'"
+    ]
+  }
+}

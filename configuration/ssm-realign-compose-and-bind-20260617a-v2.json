@@ -1,0 +1,31 @@
+{
+  "DocumentName": "AWS-RunShellScript",
+  "InstanceIds": ["i-0baea513db2b15557"],
+  "Parameters": {
+    "commands": [
+      "set -euxo pipefail",
+      "cd /opt/erpnext/frappe_docker",
+      "DB_SECRET_ID='arn:aws:secretsmanager:us-east-1:319125696520:secret:DBSecret-jRvJ7nW5wwnj-c7qCMb'",
+      "APP_SECRET_ID='arn:aws:secretsmanager:us-east-1:319125696520:secret:AppSecret-yefgDb6ENU9V-MfcDDe'",
+      "DB_SECRET_JSON=$(aws secretsmanager get-secret-value --secret-id \"$DB_SECRET_ID\" --query SecretString --output text)",
+      "APP_SECRET_JSON=$(aws secretsmanager get-secret-value --secret-id \"$APP_SECRET_ID\" --query SecretString --output text)",
+      "DB_ROOT_PASSWORD=$(echo \"$DB_SECRET_JSON\" | jq -r '.db_root_password')",
+      "ADMIN_PASSWORD=$(echo \"$APP_SECRET_JSON\" | jq -r '.admin_password')",
+      "if ! command -v docker-compose >/dev/null 2>&1; then curl -L https://github.com/docker/compose/releases/download/v2.29.2/docker-compose-linux-x86_64 -o /usr/local/bin/docker-compose && chmod +x /usr/local/bin/docker-compose; fi",
+      "COMPOSE_BIN=docker-compose",
+      "$COMPOSE_BIN -f compose.yaml -f compose.public.yml down --remove-orphans || true",
+      "$COMPOSE_BIN -f compose.yaml -f compose.public.yml up -d",
+      "sleep 20",
+      "docker ps --format 'table {{.Names}}\\t{{.Image}}\\t{{.Status}}'",
+      "if docker exec frappe_docker-backend-1 test -d /home/frappe/frappe-bench/sites/frontend; then echo 'Site frontend already exists'; else docker exec frappe_docker-backend-1 bash -lc \"bench new-site frontend --no-mariadb-socket --admin-password '$ADMIN_PASSWORD' --mariadb-root-password '$DB_ROOT_PASSWORD' --mariadb-user-host-login-scope='%'\"; fi",
+      "docker exec frappe_docker-backend-1 bash -lc \"bench --site frontend install-app erpnext || true\"",
+      "docker exec frappe_docker-backend-1 bash -lc \"bench --site frontend migrate\"",
+      "docker exec frappe_docker-backend-1 bash -lc \"bench use frontend\"",
+      "docker exec frappe_docker-backend-1 bash -lc \"bench --site frontend set-config host_name http://44.198.225.186\"",
+      "docker exec frappe_docker-backend-1 bash -lc \"bench --site frontend add-domain 44.198.225.186 || true\"",
+      "docker restart frappe_docker-frontend-1",
+      "sleep 8",
+      "curl -I http://127.0.0.1:80 || true"
+    ]
+  }
+}

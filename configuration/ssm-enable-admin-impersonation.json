@@ -1,0 +1,8 @@
+{
+  "commands": [
+    "cat > /tmp/custom_impersonate.py <<'PY'\nimport frappe\nfrom frappe import _\n\n\ndef _is_impersonation_admin(user: str) -> bool:\n    if user == 'Administrator':\n        return True\n    return 'System Manager' in frappe.get_roles(user)\n\n\n@frappe.whitelist()\ndef login_as(target_user: str):\n    current_user = frappe.session.user\n\n    if current_user == 'Guest':\n        frappe.throw(_('Login required'))\n\n    if not _is_impersonation_admin(current_user):\n        frappe.throw(_('Only System Managers can impersonate users'))\n\n    target_user = (target_user or '').strip()\n    if not target_user:\n        frappe.throw(_('Target user is required'))\n\n    if target_user == 'Administrator':\n        frappe.throw(_('Impersonating Administrator is not allowed'))\n\n    if not frappe.db.exists('User', target_user):\n        frappe.throw(_('User {0} not found').format(target_user))\n\n    enabled = frappe.db.get_value('User', target_user, 'enabled')\n    if not enabled:\n        frappe.throw(_('User {0} is disabled').format(target_user))\n\n    frappe.logger('impersonation').info(\n        'User %s impersonated %s', current_user, target_user\n    )\n\n    frappe.local.login_manager.login_as(target_user)\n    return {'ok': True, 'target_user': target_user}\nPY",
+    "docker cp /tmp/custom_impersonate.py frappe_docker-backend-1:/home/frappe/frappe-bench/apps/frappe/frappe/custom_impersonate.py",
+    "docker exec -w /home/frappe/frappe-bench frappe_docker-backend-1 python -m py_compile /home/frappe/frappe-bench/apps/frappe/frappe/custom_impersonate.py",
+    "docker exec -w /home/frappe/frappe-bench frappe_docker-backend-1 bash -lc 'bench --site frontend clear-cache'"
+  ]
+}

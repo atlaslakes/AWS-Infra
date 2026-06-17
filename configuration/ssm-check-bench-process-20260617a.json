@@ -1,0 +1,11 @@
+{
+  "DocumentName": "AWS-RunShellScript",
+  "InstanceIds": ["i-0baea513db2b15557"],
+  "Parameters": {
+    "commands": [
+      "set -euxo pipefail",
+      "docker exec frappe_docker-backend-1 sh -lc 'ps -ef | grep -E \"bench|python|mariadb|mysql\" | grep -v grep | sed -n \"1,120p\"'",
+      "docker exec frappe_docker-backend-1 sh -lc 'ls -la /home/frappe/frappe-bench/sites | sed -n \"1,120p\"'"
+    ]
+  }
+}

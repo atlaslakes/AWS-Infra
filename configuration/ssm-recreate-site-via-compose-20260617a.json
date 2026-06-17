@@ -1,0 +1,18 @@
+{
+  "DocumentName": "AWS-RunShellScript",
+  "InstanceIds": ["i-0baea513db2b15557"],
+  "Parameters": {
+    "commands": [
+      "set -euxo pipefail",
+      "cd /opt/erpnext/frappe_docker",
+      "docker exec frappe_docker-backend-1 rm -rf /home/frappe/frappe-bench/sites/frontend /home/frappe/frappe-bench/sites/44.198.225.186 || true",
+      "docker exec frappe_docker-backend-1 mysql -h erpnext-prod-clean-20260617a-erpnextdb-eaoiyrxodztc.c2diyosis802.us-east-1.rds.amazonaws.com -P 3306 -u erpnext -pAtlasLakesAws123! -e \"DROP DATABASE IF EXISTS _bcb022432d4a5aae; DROP USER IF EXISTS '_bcb022432d4a5aae'@'%'; FLUSH PRIVILEGES;\"",
+      "docker-compose -f compose.yaml -f compose.public.yml up -d configurator",
+      "docker-compose -f compose.yaml -f compose.public.yml up create-site",
+      "docker exec frappe_docker-backend-1 bench --site frontend set-config host_name http://44.198.225.186",
+      "docker exec frappe_docker-backend-1 sh -lc 'printf frontend > /home/frappe/frappe-bench/sites/currentsite.txt && ln -sfn frontend /home/frappe/frappe-bench/sites/44.198.225.186'",
+      "docker restart frappe_docker-backend-1 frappe_docker-frontend-1",
+      "curl -sS -I --max-time 25 http://44.198.225.186"
+    ]
+  }
+}

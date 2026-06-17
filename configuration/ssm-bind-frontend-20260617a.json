@@ -1,0 +1,18 @@
+{
+  "DocumentName": "AWS-RunShellScript",
+  "InstanceIds": ["i-0baea513db2b15557"],
+  "Parameters": {
+    "commands": [
+      "set -euxo pipefail",
+      "docker ps --format 'table {{.Names}}\\t{{.Status}}'",
+      "docker exec frappe_docker-backend-1 bash -lc \"bench --site frontend migrate\"",
+      "docker exec frappe_docker-backend-1 bash -lc \"bench use frontend\"",
+      "docker exec frappe_docker-backend-1 bash -lc \"bench --site frontend set-config host_name https://karavanimports.com\"",
+      "docker exec frappe_docker-backend-1 bash -lc \"bench --site frontend add-domain karavanimports.com || true\"",
+      "docker exec frappe_docker-backend-1 bash -lc \"bench --site frontend add-domain 44.198.225.186 || true\"",
+      "docker restart frappe_docker-frontend-1",
+      "sleep 8",
+      "curl -I http://127.0.0.1:80 || true"
+    ]
+  }
+}

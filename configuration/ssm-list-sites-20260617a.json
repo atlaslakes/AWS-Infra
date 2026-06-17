@@ -1,0 +1,12 @@
+{
+  "DocumentName": "AWS-RunShellScript",
+  "InstanceIds": ["i-0baea513db2b15557"],
+  "Parameters": {
+    "commands": [
+      "set -euxo pipefail",
+      "docker exec frappe_docker-backend-1 bash -lc 'ls -la /home/frappe/frappe-bench/sites'",
+      "docker exec frappe_docker-backend-1 bash -lc 'find /home/frappe/frappe-bench/sites -maxdepth 2 -name site_config.json -print'",
+      "docker exec frappe_docker-backend-1 bash -lc 'cat /home/frappe/frappe-bench/sites/common_site_config.json'"
+    ]
+  }
+}
