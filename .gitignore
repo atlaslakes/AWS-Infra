@@ -10,7 +10,7 @@ erpnext.env.*
 # AWS CLI config
 .aws/
 
-# Terraform state & secrets
+# Terraform / local state
 *.tfstate
 *.tfstate.backup
 *.tfvars
@@ -18,14 +18,23 @@ erpnext.env.*
 .terraform/
 .terraform.lock.hcl
 
-# Python / caches
+# Python
+.venv/
 __pycache__/
 *.pyc
 
-# OS
+# Large local data files
+Data_06_23.csv
+_migrate.tgz
+
+# Scratch / temp files
+*.txt
+!requirements*.txt
+icon_b64.txt
+tight_b64.txt
+
+# OS / editor
 .DS_Store
 Thumbs.db
-
-# Editor
 .vscode/
 .idea/
