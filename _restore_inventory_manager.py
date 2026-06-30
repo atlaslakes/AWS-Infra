@@ -27,7 +27,13 @@ query = """SELECT
         (SELECT ip.price_list_rate * COALESCE(i.items_per_case, 1)
          FROM `tabItem Price` ip
          WHERE ip.item_code = i.item_code AND ip.price_list = 'Standard Selling'
-         LIMIT 1), 0), 2) AS "Price/Case:Currency:120"
+         LIMIT 1), 0), 2) AS "Price/Case:Currency:120",
+    (
+        SELECT MIN(il.expiry_date)
+        FROM `tabItem Lot` il
+        WHERE il.item_code = i.item_code
+          AND il.expiry_date >= CURDATE()
+    ) AS "Nearest Expiry:Date:120"
 FROM `tabItem` i
 WHERE i.disabled = 0
 ORDER BY i.item_group, i.item_name"""
@@ -35,4 +41,4 @@ ORDER BY i.item_group, i.item_name"""
 r = s.post(f"{URL}/api/method/frappe.client.set_value",
            json={"doctype": "Report", "name": "Inventory Manager",
                  "fieldname": "query", "value": query}, timeout=30)
-print("Report updated:", r.status_code, "OK" if r.status_code in (200, 201) else r.text[:200])
+print("Report updated:", r.status_code, "OK" if r.status_code in (200, 201) else r.text[:300])
