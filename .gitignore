@@ -22,6 +22,7 @@ erpnext.env.*
 .venv/
 __pycache__/
 *.pyc
+scripts/*.py
 
 # Large local data files
 Data_06_23.csv

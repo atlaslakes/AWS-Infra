@@ -1,0 +1,26 @@
+{
+  "DocumentName": "AWS-RunShellScript",
+  "InstanceIds": ["i-0be6845d8493d077a"],
+  "Parameters": {
+    "commands": [
+      "set -euo pipefail",
+      "# Create the public files directory if it doesn't exist",
+      "docker exec frappe_docker-backend-1 mkdir -p /home/frappe/frappe-bench/sites/frontend/public/files",
+      "",
+      "# Decode and create logo files in the container",
+      "echo '{{TIGHT_LOGO_B64}}' | docker exec -i frappe_docker-backend-1 bash -c 'base64 -d > /home/frappe/frappe-bench/sites/frontend/public/files/karavan-logo-tight.png'",
+      "echo '{{ICON_LOGO_B64}}' | docker exec -i frappe_docker-backend-1 bash -c 'base64 -d > /home/frappe/frappe-bench/sites/frontend/public/files/karavan-logo-icon.png'",
+      "",
+      "# Fix permissions",
+      "docker exec frappe_docker-backend-1 chown -R frappe:frappe /home/frappe/frappe-bench/sites/frontend/public/files",
+      "",
+      "# Update ERPNext settings via bench execute",
+      "docker exec frappe_docker-backend-1 bash -lc \"bench --site frontend execute frappe.client.set_value --args 'Website Settings', 'Website Settings', {'app_logo': '/files/karavan-logo-tight.png', 'favicon': '/files/karavan-logo-icon.png', 'banner_image': '/files/karavan-logo-tight.png', 'app_name': 'Karavan Imports'}\"",
+      "docker exec frappe_docker-backend-1 bash -lc \"bench --site frontend execute frappe.client.set_value --args 'Navbar Settings', 'Navbar Settings', {'app_logo': '/files/karavan-logo-tight.png'}\"",
+      "",
+      "# Clear cache to apply changes",
+      "docker exec frappe_docker-backend-1 bash -lc 'bench --site frontend clear-cache'",
+      "echo 'Logo update complete'"
+    ]
+  }
+}

@@ -1,0 +1,208 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: CloudFront + ACM + custom domain in front of existing ERPNext EC2 origin.
+
+Parameters:
+  Environment:
+    Type: String
+    Default: prod
+    AllowedValues:
+      - dev
+      - stage
+      - prod
+
+  AppOriginDomainName:
+    Type: String
+    Description: EC2 origin domain name (public DNS name or Elastic IP DNS), no scheme and no path.
+
+  AppOriginHttpPort:
+    Type: Number
+    Default: 80
+    MinValue: 1
+    MaxValue: 65535
+
+  AppOriginHttpsPort:
+    Type: Number
+    Default: 443
+    MinValue: 1
+    MaxValue: 65535
+
+  AppOriginProtocolPolicy:
+    Type: String
+    Default: http-only
+    AllowedValues:
+      - http-only
+      - https-only
+      - match-viewer
+    Description: Use http-only unless your origin already has valid TLS.
+
+  DomainName:
+    Type: String
+    Description: Primary custom domain (for example app.atlaslakes.com)
+
+  AlternateDomainName:
+    Type: String
+    Default: ''
+    Description: Optional secondary domain. Leave empty if not used.
+
+  AcmCertificateArn:
+    Type: String
+    Description: ACM cert ARN in us-east-1 that covers DomainName (+ alternate if used).
+
+  CloudFrontPriceClass:
+    Type: String
+    Default: PriceClass_100
+    AllowedValues:
+      - PriceClass_100
+      - PriceClass_200
+      - PriceClass_All
+
+  OriginVerifyHeaderName:
+    Type: String
+    Default: X-Origin-Verify
+    Description: Header name CloudFront sends to origin. Configure origin to require it.
+
+  OriginVerifyHeaderValue:
+    Type: String
+    NoEcho: true
+    MinLength: 16
+    Description: Secret header value CloudFront sends to origin. Use a long random string.
+
+Conditions:
+  HasAlternateDomainName: !Not [!Equals [!Ref AlternateDomainName, '']]
+
+Resources:
+  CachePolicyNoCache:
+    Type: AWS::CloudFront::CachePolicy
+    Properties:
+      CachePolicyConfig:
+        Name: !Sub '${AWS::StackName}-no-cache'
+        DefaultTTL: 0
+        MaxTTL: 1
+        MinTTL: 0
+        ParametersInCacheKeyAndForwardedToOrigin:
+          CookiesConfig:
+            CookieBehavior: all
+          EnableAcceptEncodingBrotli: true
+          EnableAcceptEncodingGzip: true
+          HeadersConfig:
+            HeaderBehavior: whitelist
+            Headers:
+              - Authorization
+              - CloudFront-Forwarded-Proto
+              - Host
+              - Origin
+              - Referer
+              - User-Agent
+              - X-Forwarded-For
+          QueryStringsConfig:
+            QueryStringBehavior: all
+
+  OriginRequestPolicyAllViewer:
+    Type: AWS::CloudFront::OriginRequestPolicy
+    Properties:
+      OriginRequestPolicyConfig:
+        Name: !Sub '${AWS::StackName}-all-viewer'
+        CookiesConfig:
+          CookieBehavior: all
+        HeadersConfig:
+          HeaderBehavior: allViewer
+        QueryStringsConfig:
+          QueryStringBehavior: all
+
+  ResponseHeadersPolicySecurity:
+    Type: AWS::CloudFront::ResponseHeadersPolicy
+    Properties:
+      ResponseHeadersPolicyConfig:
+        Name: !Sub '${AWS::StackName}-security-headers'
+        SecurityHeadersConfig:
+          ContentTypeOptions:
+            Override: true
+          FrameOptions:
+            FrameOption: SAMEORIGIN
+            Override: true
+          ReferrerPolicy:
+            ReferrerPolicy: strict-origin-when-cross-origin
+            Override: true
+          StrictTransportSecurity:
+            AccessControlMaxAgeSec: 31536000
+            IncludeSubdomains: true
+            Override: true
+          XSSProtection:
+            ModeBlock: true
+            Protection: true
+            Override: true
+
+  AppCloudFrontDistribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Enabled: true
+        Comment: !Sub 'ERPNext ${Environment} distribution'
+        PriceClass: !Ref CloudFrontPriceClass
+        IPV6Enabled: true
+        HttpVersion: http2and3
+        Aliases: !If
+          - HasAlternateDomainName
+          -
+            - !Ref DomainName
+            - !Ref AlternateDomainName
+          -
+            - !Ref DomainName
+        Origins:
+          - Id: app-origin
+            DomainName: !Ref AppOriginDomainName
+            CustomOriginConfig:
+              HTTPPort: !Ref AppOriginHttpPort
+              HTTPSPort: !Ref AppOriginHttpsPort
+              OriginKeepaliveTimeout: 30
+              OriginReadTimeout: 60
+              OriginProtocolPolicy: !Ref AppOriginProtocolPolicy
+              OriginSSLProtocols:
+                - TLSv1.2
+            OriginCustomHeaders:
+              - HeaderName: !Ref OriginVerifyHeaderName
+                HeaderValue: !Ref OriginVerifyHeaderValue
+        DefaultCacheBehavior:
+          TargetOriginId: app-origin
+          ViewerProtocolPolicy: redirect-to-https
+          AllowedMethods:
+            - GET
+            - HEAD
+            - OPTIONS
+            - PUT
+            - PATCH
+            - POST
+            - DELETE
+          CachedMethods:
+            - GET
+            - HEAD
+          Compress: true
+          CachePolicyId: !Ref CachePolicyNoCache
+          OriginRequestPolicyId: !Ref OriginRequestPolicyAllViewer
+          ResponseHeadersPolicyId: !Ref ResponseHeadersPolicySecurity
+        ViewerCertificate:
+          AcmCertificateArn: !Ref AcmCertificateArn
+          SslSupportMethod: sni-only
+          MinimumProtocolVersion: TLSv1.2_2021
+
+Outputs:
+  DistributionId:
+    Description: CloudFront distribution ID
+    Value: !Ref AppCloudFrontDistribution
+
+  DistributionDomainName:
+    Description: CloudFront domain to target from GoDaddy CNAME
+    Value: !GetAtt AppCloudFrontDistribution.DomainName
+
+  GoDaddyPrimaryRecordType:
+    Value: CNAME
+
+  GoDaddyPrimaryRecordHost:
+    Value: !Select [0, !Split ['.', !Ref DomainName]]
+
+  GoDaddyPrimaryRecordPointsTo:
+    Value: !GetAtt AppCloudFrontDistribution.DomainName
+
+  CloudFrontHostedZoneId:
+    Description: Fixed CloudFront hosted zone ID (for ALIAS-capable DNS providers)
+    Value: Z2FDTNDATAQYW2
