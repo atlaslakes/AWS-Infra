@@ -1,2 +1,0 @@
-
-aws: [ERROR]: An error occurred (ValidationError) when calling the DescribeStacks operation: Stack with id erpnext-prod-clean-20260615c does not exist

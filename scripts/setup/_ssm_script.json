@@ -1,0 +1,10 @@
+{
+  "InstanceIds": ["i-0baea513db2b15557"],
+  "DocumentName": "AWS-RunShellScript",
+  "Parameters": {
+    "commands": [
+      "docker exec frappe_docker-backend-1 bash -c 'cd /home/frappe/frappe-bench && bench --site karavanimports.com execute frappe.db.set_value --args \"[\\\"Email Account\\\",\\\"Karavan Imports\\\",\\\"connected_user\\\",\\\"karavanimports@atlaslakes.com\\\"]\" && bench --site karavanimports.com execute frappe.db.get_value --args \"[\\\"Email Account\\\",\\\"Karavan Imports\\\",\\\"connected_user\\\"]\"'"
+    ]
+  },
+  "TimeoutSeconds": 30
+}

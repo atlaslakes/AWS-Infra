@@ -1,0 +1,1 @@
+{"commands":["docker exec frappe_docker-backend-1 sh -lc \"which mysql 

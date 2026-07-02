@@ -1,0 +1,10 @@
+{
+  "commands": [
+    "B=frappe_docker-backend-1",
+    "echo CURRENTSITE:; docker exec $B cat /home/frappe/frappe-bench/sites/currentsite.txt 2>/dev/null",
+    "echo; echo SITE_DIRS:; docker exec $B bash -lc 'cd /home/frappe/frappe-bench/sites; for d in */ ; do if [ -f \"$d/site_config.json\" ]; then echo \"REAL: $d\"; else echo \"alias/other: $d\"; fi; done'",
+    "echo; echo DB_PER_SITE:; docker exec $B bash -lc 'cd /home/frappe/frappe-bench/sites; for d in frontend karavanimports.com www.karavanimports.com 44.198.225.186; do echo -n \"$d -> \"; grep -o \"\\\"db_name\\\"[^,]*\" \"$d/site_config.json\" 2>/dev/null || echo NO_CONFIG; done'",
+    "echo; echo HOST_ROUTING_nginx:; docker exec frappe_docker-frontend-1 sh -lc 'grep -ri server_name /etc/nginx/ 2>/dev/null | head' || echo no-frontend-ctr",
+    "echo; echo S3TEST:; aws s3 ls s3://erpnext-prod-clean-20260617a-erpnextbucket-uy3oguk4cgy1/ --region us-east-1 >/dev/null 2>&1 && echo S3_OK || echo S3_FAIL"
+  ]
+}

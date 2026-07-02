@@ -1,0 +1,14 @@
+{
+  "InstanceIds": ["i-0baea513db2b15557"],
+  "DocumentName": "AWS-RunShellScript",
+  "Parameters": {
+    "commands": [
+      "echo === CONTAINERS ===; docker ps --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}'",
+      "echo; echo === BACKEND LOGS (last 20) ===; docker logs frappe_docker-backend-1 --tail 20 2>&1",
+      "echo; echo === FRONTEND LOGS (last 10) ===; docker logs frappe_docker-frontend-1 --tail 10 2>&1",
+      "echo; echo === DISK ===; df -h /",
+      "echo; echo === MEMORY ===; free -m"
+    ]
+  },
+  "TimeoutSeconds": 30
+}

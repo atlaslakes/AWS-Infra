@@ -1,0 +1,1 @@
+{"commands":["docker exec frappe_docker-backend-1 bash -lc \"ps -eo pid,etime,cmd | grep -iE 'migrate|_import.py' | grep -v grep\" || echo NONE","echo ---; free -m | head -2"]}

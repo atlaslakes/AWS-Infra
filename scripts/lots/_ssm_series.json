@@ -1,0 +1,12 @@
+{
+  "InstanceIds": [
+    "i-0baea513db2b15557"
+  ],
+  "DocumentName": "AWS-RunShellScript",
+  "Parameters": {
+    "commands": [
+      "docker exec frappe_docker-backend-1 bash -c 'echo CmltcG9ydCBmcmFwcGUKZnJhcHBlLmluaXQoc2l0ZT0iZnJvbnRlbmQiKQpmcmFwcGUuY29ubmVjdCgpCgpyb3dzID0gZnJhcHBlLmdldF9hbGwoIlNhbGVzIEludm9pY2UiLCBmaWVsZHM9WyJuYW1pbmdfc2VyaWVzIl0sIGxpbWl0PTEpCnNlcmllcyA9IHJvd3NbMF1bIm5hbWluZ19zZXJpZXMiXSBpZiByb3dzIGVsc2UgIlNJTlYtIgpwcmludCgiTmFtaW5nIHNlcmllczoiLCBzZXJpZXMpCgpjdXIgPSBmcmFwcGUuZGIuc3FsKCJTRUxFQ1QgY3VycmVudCBGUk9NIHRhYlNlcmllcyBXSEVSRSBuYW1lPSVzIiwgc2VyaWVzKQpwcmludCgiQ3VycmVudCBjb3VudGVyOiIsIGN1clswXVswXSBpZiBjdXIgZWxzZSAibm90IGZvdW5kIikKCmlmIGN1cjoKICAgIGZyYXBwZS5kYi5zcWwoIlVQREFURSB0YWJTZXJpZXMgU0VUIGN1cnJlbnQ9NDk5OSBXSEVSRSBuYW1lPSVzIiwgc2VyaWVzKQplbHNlOgogICAgZnJhcHBlLmRiLnNxbCgiSU5TRVJUIElOVE8gdGFiU2VyaWVzIChuYW1lLCBjdXJyZW50KSBWQUxVRVMgKCVzLCA0OTk5KSIsIHNlcmllcykKCmZyYXBwZS5kYi5jb21taXQoKQoKbmV3X2N1ciA9IGZyYXBwZS5kYi5zcWwoIlNFTEVDVCBjdXJyZW50IEZST00gdGFiU2VyaWVzIFdIRVJFIG5hbWU9JXMiLCBzZXJpZXMpCnByaW50KCJOZXcgY291bnRlcjoiLCBuZXdfY3VyWzBdWzBdIGlmIG5ld19jdXIgZWxzZSAiPyIpCnByaW50KCJTVUNDRVNTIOKAlCBuZXh0IFNhbGVzIEludm9pY2Ugd2lsbCBiZSAjNTAwMCIpCg== | base64 -d > /tmp/set_series.py'",
+      "docker exec frappe_docker-backend-1 bash -lc 'mkdir -p /home/frappe/frappe-bench/logs && cd /home/frappe/frappe-bench/sites && ../env/bin/python /tmp/set_series.py'"
+    ]
+  }
+}

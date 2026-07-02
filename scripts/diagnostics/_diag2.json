@@ -1,0 +1,6 @@
+{"commands":[
+"echo PROC:; docker exec frappe_docker-backend-1 bash -lc \"ps -eo etimes,rss,cmd | grep -iE 'migrate|_import.py' | grep -v grep\" 2>&1 | head",
+"echo; echo MIGRATE_LOG_TAIL:; docker exec frappe_docker-backend-1 bash -lc 'tail -n 8 /home/frappe/frappe-bench/logs/*.log 2>/dev/null; tail -n 8 /home/frappe/frappe-bench/sites/frontend/logs/*.log 2>/dev/null' 2>&1 | tail -20",
+"echo; echo PATCHLOG_COUNT:; docker exec frappe_docker-backend-1 bash -lc \"cd /home/frappe/frappe-bench/sites && ../env/bin/python -c \\\"import frappe;frappe.init(site='frontend');frappe.connect();print('patches:',frappe.db.count('Patch Log'));print('last:',frappe.db.sql('select patch from tabPatchLog order by creation desc limit 3') if frappe.db.table_exists('Patch Log') else 'n/a')\\\"\" 2>&1 | tail -6",
+"echo END"
+]}

@@ -1,0 +1,7 @@
+{"commands":[
+"echo HOST_MEM:; free -m",
+"echo; echo LOADAVG:; cat /proc/loadavg",
+"echo; echo TOP5_MEM:; ps -eo pid,pmem,rss,comm --sort=-rss | head -6",
+"echo; echo CONTAINER_PROCS:; docker exec frappe_docker-backend-1 bash -lc \"ps -eo pid,etimes,rss,cmd | grep -iE 'migrate|_import|python|bench' | grep -v grep\" 2>&1 | head -20",
+"echo END_DIAG"
+]}

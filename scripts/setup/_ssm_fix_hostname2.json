@@ -1,0 +1,11 @@
+{
+  "InstanceIds": ["i-0baea513db2b15557"],
+  "DocumentName": "AWS-RunShellScript",
+  "Parameters": {
+    "commands": [
+      "docker exec frappe_docker-frontend-1 python3 -c \"import json; p='/home/frappe/frappe-bench/sites/karavanimports.com/site_config.json'; d=json.load(open(p)); d['host_name']='https://www.karavanimports.com'; json.dump(d,open(p,'w'),indent=2); print('OK:', d.get('host_name'))\"",
+      "docker exec frappe_docker-backend-1 python3 -c \"import json; p='/home/frappe/frappe-bench/sites/karavanimports.com/site_config.json'; print('host_name:', json.load(open(p)).get('host_name','NOT SET'))\""
+    ]
+  },
+  "TimeoutSeconds": 30
+}

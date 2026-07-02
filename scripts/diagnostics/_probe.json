@@ -1,0 +1,7 @@
+{
+  "commands": [
+    "echo CONTAINERS:; docker ps --format '{{.Names}}' | grep -i backend || true",
+    "echo SITES:; docker exec $(docker ps --format '{{.Names}}' | grep backend | head -1) ls /home/frappe/frappe-bench/sites 2>/dev/null || true",
+    "echo AWSCLI:; which aws || ls /usr/local/bin/aws || echo no-aws"
+  ]
+}

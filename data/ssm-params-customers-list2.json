@@ -1,0 +1,1 @@
+{"commands":["docker exec frappe_docker-backend-1 bench --site frontend execute frappe.get_all --kwargs \"{'doctype':'Customer','fields':['name'],'limit_page_length':5}\""]}

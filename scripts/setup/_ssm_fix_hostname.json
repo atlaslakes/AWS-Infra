@@ -1,0 +1,9 @@
+{
+  "InstanceIds": ["i-0baea513db2b15557"],
+  "DocumentName": "AWS-RunShellScript",
+  "Parameters": {
+    "commands": [
+      "CONTAINER=$(docker ps --format '{{.Names}}' | grep -iE 'backend|frappe' | head -1); echo \"Container: $CONTAINER\"; docker exec $CONTAINER bash -c \"cd /home/frappe/frappe-bench && bench --site karavanimports.com set-config host_name https://www.karavanimports.com && bench --site karavanimports.com clear-cache && echo DONE\""
+    ]
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "InstanceIds": ["i-0baea513db2b15557"],
+  "DocumentName": "AWS-RunShellScript",
+  "Parameters": {
+    "commands": [
+      "docker exec frappe_docker-backend-1 bash -c 'echo aW1wb3J0IGpzb24KcCA9ICcvaG9tZS9mcmFwcGUvZnJhcHBlLWJlbmNoL3NpdGVzL2NvbW1vbl9zaXRlX2NvbmZpZy5qc29uJwpjZmcgPSBqc29uLmxvYWQob3BlbihwKSkKY2ZnWydzZXJ2ZXJfc2NyaXB0X2VuYWJsZWQnXSA9IDEKanNvbi5kdW1wKGNmZywgb3BlbihwLCAndycpLCBpbmRlbnQ9MikKcHJpbnQoJ09LJywgY2ZnWydzZXJ2ZXJfc2NyaXB0X2VuYWJsZWQnXSkK | base64 -d | python3' && docker-compose -f /opt/erpnext/frappe_docker/docker-compose.yml restart backend queue-short queue-long scheduler && echo RESTARTED"
+    ]
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "InstanceIds": ["i-0baea513db2b15557"],
+  "DocumentName": "AWS-RunShellScript",
+  "Parameters": {
+    "commands": [
+      "docker exec frappe_docker-backend-1 bash -lc 'mkdir -p /home/frappe/frappe-bench/logs && cd /home/frappe/frappe-bench/sites && ../env/bin/python -c \"import frappe,json; frappe.init(site=\\\"frontend\\\"); frappe.connect(); accts=frappe.get_all(\\\"Email Account\\\",fields=[\\\"name\\\",\\\"email_id\\\",\\\"service\\\",\\\"smtp_server\\\",\\\"smtp_port\\\",\\\"use_ssl\\\",\\\"use_tls\\\",\\\"login_id\\\",\\\"password\\\",\\\"enable_outgoing\\\",\\\"default_outgoing\\\",\\\"enable_incoming\\\",\\\"default_incoming\\\",\\\"auth_method\\\"]); print(json.dumps(accts,default=str,indent=2))\"'"
+    ]
+  }
+}

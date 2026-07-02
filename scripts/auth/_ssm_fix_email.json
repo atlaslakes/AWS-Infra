@@ -1,0 +1,14 @@
+{
+  "InstanceIds": ["i-0baea513db2b15557"],
+  "DocumentName": "AWS-RunShellScript",
+  "Parameters": {
+    "commands": [
+      "docker exec frappe_docker-backend-1 bash -lc 'cd /home/frappe/frappe-bench && bench --site karavanimports.com execute frappe.db.set_value --args \"[\\\"Email Account\\\", \\\"Karavan Imports\\\", \\\"email_id\\\", \\\"accounting@karavanimports.com\\\"]\" && echo email_id_ok'",
+      "docker exec frappe_docker-backend-1 bash -lc 'cd /home/frappe/frappe-bench && bench --site karavanimports.com execute frappe.db.set_value --args \"[\\\"Email Account\\\", \\\"Karavan Imports\\\", \\\"connected_user\\\", \\\"Administrator\\\"]\" && echo connected_user_ok'",
+      "docker exec frappe_docker-backend-1 bash -lc 'cd /home/frappe/frappe-bench && bench --site karavanimports.com execute frappe.db.set_value --args \"[\\\"Email Account\\\", \\\"Karavan Imports\\\", \\\"send_notification_to\\\", \\\"admin@atlaslakes.com\\\"]\" && echo notify_ok'",
+      "docker exec frappe_docker-backend-1 bash -lc 'cd /home/frappe/frappe-bench && bench --site karavanimports.com execute frappe.db.get_value --args \"[\\\"Email Account\\\", \\\"Karavan Imports\\\", [\\\"email_id\\\", \\\"connected_user\\\", \\\"connected_app\\\", \\\"auth_method\\\", \\\"send_notification_to\\\"]]\" && echo VERIFY_DONE'",
+      "docker exec frappe_docker-backend-1 bash -lc 'cd /home/frappe/frappe-bench && bench --site karavanimports.com clear-cache && echo CACHE_CLEARED'"
+    ]
+  },
+  "TimeoutSeconds": 60
+}

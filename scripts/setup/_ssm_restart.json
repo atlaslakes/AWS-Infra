@@ -1,0 +1,10 @@
+{
+  "InstanceIds": ["i-0baea513db2b15557"],
+  "DocumentName": "AWS-RunShellScript",
+  "Parameters": {
+    "commands": [
+      "docker restart frappe_docker-backend-1 frappe_docker-queue-short-1 frappe_docker-queue-long-1 frappe_docker-scheduler-1 && echo RESTARTED"
+    ]
+  },
+  "TimeoutSeconds": 60
+}
