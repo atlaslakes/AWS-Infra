@@ -1,0 +1,441 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  ACH payments backend for Karavan Imports (Dwolla + Plaid) — API Gateway +
+  Lambda for bank linking and webhook reconciliation, plus a scheduled
+  Lambda that scans ERPNext for due auto-pay invoices. Deployed separately
+  from erpnext.yaml since this is event-driven/serverless rather than the
+  always-on Docker Compose stack.
+
+Parameters:
+  Environment:
+    Type: String
+    AllowedValues:
+      - dev
+      - prod
+    Description: Deployment environment. Controls log retention and alarm wiring.
+
+  ERPNextURL:
+    Type: String
+    Default: https://www.karavanimports.com
+    Description: Base URL of the ERPNext site the Lambdas call.
+
+  CodeS3Bucket:
+    Type: String
+    Description: S3 bucket containing the packaged payments/ Lambda deployment zip.
+
+  CodeS3Key:
+    Type: String
+    Description: S3 key of the packaged payments/ Lambda deployment zip (built from payments/ + payments/requirements.txt).
+
+  DwollaKey:
+    Type: String
+    NoEcho: true
+    Description: Dwolla application key (sandbox or production, matching DwollaEnvironment).
+
+  DwollaSecret:
+    Type: String
+    NoEcho: true
+    Description: Dwolla application secret.
+
+  DwollaEnvironment:
+    Type: String
+    AllowedValues:
+      - sandbox
+      - production
+    Default: sandbox
+
+  DwollaWebhookSecret:
+    Type: String
+    NoEcho: true
+    Description: Shared secret used to verify the X-Request-Signature-SHA256 header on Dwolla webhooks.
+
+  DwollaMasterFundingSourceUrl:
+    Type: String
+    Description: Dwolla funding-source URL for Atlas Lakes' own verified business bank account.
+
+  PlaidClientId:
+    Type: String
+    NoEcho: true
+
+  PlaidSecret:
+    Type: String
+    NoEcho: true
+
+  PlaidEnvironment:
+    Type: String
+    AllowedValues:
+      - sandbox
+      - development
+      - production
+    Default: sandbox
+
+  ERPNextPaymentsApiKey:
+    Type: String
+    NoEcho: true
+    Description: API key for the restricted "Payments Integration" ERPNext user created by scripts/setup/setup_ach_payments.py.
+
+  ERPNextPaymentsApiSecret:
+    Type: String
+    NoEcho: true
+
+  NotificationEmail:
+    Type: String
+    Default: ''
+    Description: Email address for CloudWatch alarm notifications on Lambda errors. Leave blank to disable.
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: Environment
+        Parameters:
+          - Environment
+          - ERPNextURL
+      - Label:
+          default: Lambda Code
+        Parameters:
+          - CodeS3Bucket
+          - CodeS3Key
+      - Label:
+          default: Dwolla
+        Parameters:
+          - DwollaKey
+          - DwollaSecret
+          - DwollaEnvironment
+          - DwollaWebhookSecret
+          - DwollaMasterFundingSourceUrl
+      - Label:
+          default: Plaid
+        Parameters:
+          - PlaidClientId
+          - PlaidSecret
+          - PlaidEnvironment
+      - Label:
+          default: ERPNext credentials
+        Parameters:
+          - ERPNextPaymentsApiKey
+          - ERPNextPaymentsApiSecret
+      - Label:
+          default: Monitoring
+        Parameters:
+          - NotificationEmail
+
+Conditions:
+  IsProd: !Equals [!Ref Environment, prod]
+  HasNotificationEmail: !Not [!Equals [!Ref NotificationEmail, '']]
+
+Resources:
+  PaymentsSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Description: Dwolla/Plaid/ERPNext credentials for the ACH payments backend Lambdas.
+      SecretString: !Sub |
+        {
+          "dwolla_key": "${DwollaKey}",
+          "dwolla_secret": "${DwollaSecret}",
+          "dwolla_environment": "${DwollaEnvironment}",
+          "dwolla_webhook_secret": "${DwollaWebhookSecret}",
+          "dwolla_master_funding_source_url": "${DwollaMasterFundingSourceUrl}",
+          "plaid_client_id": "${PlaidClientId}",
+          "plaid_secret": "${PlaidSecret}",
+          "plaid_env": "${PlaidEnvironment}",
+          "erpnext_api_key": "${ERPNextPaymentsApiKey}",
+          "erpnext_api_secret": "${ERPNextPaymentsApiSecret}"
+        }
+
+  PaymentsLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: PaymentsSecretAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - secretsmanager:GetSecretValue
+                Resource:
+                  - !Ref PaymentsSecret
+
+  LinkTokenFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub ${AWS::StackName}-link-token
+      Runtime: python3.12
+      Handler: link_token.handler.handler
+      Role: !GetAtt PaymentsLambdaRole.Arn
+      Timeout: 15
+      MemorySize: 256
+      Code:
+        S3Bucket: !Ref CodeS3Bucket
+        S3Key: !Ref CodeS3Key
+      Environment:
+        Variables:
+          PAYMENTS_SECRET_ARN: !Ref PaymentsSecret
+          ERPNEXT_URL: !Ref ERPNextURL
+
+  ExchangeAndAttachFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub ${AWS::StackName}-exchange-and-attach
+      Runtime: python3.12
+      Handler: exchange_and_attach.handler.handler
+      Role: !GetAtt PaymentsLambdaRole.Arn
+      Timeout: 30
+      MemorySize: 256
+      Code:
+        S3Bucket: !Ref CodeS3Bucket
+        S3Key: !Ref CodeS3Key
+      Environment:
+        Variables:
+          PAYMENTS_SECRET_ARN: !Ref PaymentsSecret
+          ERPNEXT_URL: !Ref ERPNextURL
+
+  DwollaWebhookFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub ${AWS::StackName}-dwolla-webhook
+      Runtime: python3.12
+      Handler: dwolla_webhook.handler.handler
+      Role: !GetAtt PaymentsLambdaRole.Arn
+      Timeout: 15
+      MemorySize: 256
+      Code:
+        S3Bucket: !Ref CodeS3Bucket
+        S3Key: !Ref CodeS3Key
+      Environment:
+        Variables:
+          PAYMENTS_SECRET_ARN: !Ref PaymentsSecret
+          ERPNEXT_URL: !Ref ERPNextURL
+
+  PlaidWebhookFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub ${AWS::StackName}-plaid-webhook
+      Runtime: python3.12
+      Handler: plaid_webhook.handler.handler
+      Role: !GetAtt PaymentsLambdaRole.Arn
+      Timeout: 15
+      MemorySize: 256
+      Code:
+        S3Bucket: !Ref CodeS3Bucket
+        S3Key: !Ref CodeS3Key
+      Environment:
+        Variables:
+          PAYMENTS_SECRET_ARN: !Ref PaymentsSecret
+          ERPNEXT_URL: !Ref ERPNextURL
+
+  AutopayScanFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub ${AWS::StackName}-autopay-scan
+      Runtime: python3.12
+      Handler: autopay_scan.handler.handler
+      Role: !GetAtt PaymentsLambdaRole.Arn
+      Timeout: 60
+      MemorySize: 256
+      Code:
+        S3Bucket: !Ref CodeS3Bucket
+        S3Key: !Ref CodeS3Key
+      Environment:
+        Variables:
+          PAYMENTS_SECRET_ARN: !Ref PaymentsSecret
+          ERPNEXT_URL: !Ref ERPNextURL
+
+  AutopayScanSchedule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Sub ${AWS::StackName}-autopay-scan-schedule
+      Description: Triggers autopay-scan hourly to initiate ACH transfers for due, auto-pay-enabled invoices.
+      ScheduleExpression: rate(1 hour)
+      State: ENABLED
+      Targets:
+        - Id: AutopayScanFunction
+          Arn: !GetAtt AutopayScanFunction.Arn
+
+  AutopayScanSchedulePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref AutopayScanFunction
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt AutopayScanSchedule.Arn
+
+  PaymentsApi:
+    Type: AWS::ApiGatewayV2::Api
+    Properties:
+      Name: !Sub ${AWS::StackName}-api
+      ProtocolType: HTTP
+
+  LinkTokenIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref PaymentsApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !GetAtt LinkTokenFunction.Arn
+      PayloadFormatVersion: '2.0'
+
+  LinkTokenRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref PaymentsApi
+      RouteKey: POST /link-token
+      Target: !Sub integrations/${LinkTokenIntegration}
+
+  LinkTokenPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref LinkTokenFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${PaymentsApi}/*/*/link-token
+
+  ExchangeAndAttachIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref PaymentsApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !GetAtt ExchangeAndAttachFunction.Arn
+      PayloadFormatVersion: '2.0'
+
+  ExchangeAndAttachRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref PaymentsApi
+      RouteKey: POST /exchange-and-attach
+      Target: !Sub integrations/${ExchangeAndAttachIntegration}
+
+  ExchangeAndAttachPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref ExchangeAndAttachFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${PaymentsApi}/*/*/exchange-and-attach
+
+  DwollaWebhookIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref PaymentsApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !GetAtt DwollaWebhookFunction.Arn
+      PayloadFormatVersion: '2.0'
+
+  DwollaWebhookRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref PaymentsApi
+      RouteKey: POST /webhooks/dwolla
+      Target: !Sub integrations/${DwollaWebhookIntegration}
+
+  DwollaWebhookPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref DwollaWebhookFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${PaymentsApi}/*/*/webhooks/dwolla
+
+  PlaidWebhookIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref PaymentsApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !GetAtt PlaidWebhookFunction.Arn
+      PayloadFormatVersion: '2.0'
+
+  PlaidWebhookRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref PaymentsApi
+      RouteKey: POST /webhooks/plaid
+      Target: !Sub integrations/${PlaidWebhookIntegration}
+
+  PlaidWebhookPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref PlaidWebhookFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${PaymentsApi}/*/*/webhooks/plaid
+
+  PaymentsApiStage:
+    Type: AWS::ApiGatewayV2::Stage
+    Properties:
+      ApiId: !Ref PaymentsApi
+      StageName: !Ref Environment
+      AutoDeploy: true
+
+  AlarmTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      DisplayName: !Sub ${AWS::StackName}-alarms
+      Subscription: !If
+        - HasNotificationEmail
+        - - Protocol: email
+            Endpoint: !Ref NotificationEmail
+        - !Ref AWS::NoValue
+
+  DwollaWebhookErrorsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub ${AWS::StackName}-dwolla-webhook-errors
+      AlarmDescription: dwolla-webhook Lambda is erroring — an ACH transfer completion/failure event may not have reconciled into ERPNext. Needs human follow-up.
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref DwollaWebhookFunction
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      AlarmActions:
+        - !Ref AlarmTopic
+      TreatMissingData: notBreaching
+
+  AutopayScanErrorsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub ${AWS::StackName}-autopay-scan-errors
+      AlarmDescription: autopay-scan Lambda is erroring — due invoices may not be getting their ACH transfers initiated.
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref AutopayScanFunction
+      Statistic: Sum
+      Period: 3600
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      AlarmActions:
+        - !Ref AlarmTopic
+      TreatMissingData: notBreaching
+
+Outputs:
+  ApiBaseUrl:
+    Description: Base URL Base44 should call for /link-token and /exchange-and-attach.
+    Value: !Sub https://${PaymentsApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}
+
+  DwollaWebhookUrl:
+    Description: Register this URL as the Dwolla webhook subscription endpoint.
+    Value: !Sub https://${PaymentsApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}/webhooks/dwolla
+
+  PlaidWebhookUrl:
+    Description: Register this URL as the Plaid webhook endpoint (Link token creation request).
+    Value: !Sub https://${PaymentsApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}/webhooks/plaid
+
+  PaymentsSecretArn:
+    Description: Secrets Manager ARN holding Dwolla/Plaid/ERPNext credentials.
+    Value: !Ref PaymentsSecret
