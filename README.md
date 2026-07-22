@@ -68,7 +68,6 @@ Items are sourced from `aws-infra/Karavan Inventory-updated.xlsx` (323 products)
 **Custom fields on Item doctype:**
 | Field | Type | Purpose |
 |-------|------|---------|
-| `cases_on_hand` | Int | Stock quantity (set via UPC matching from Excel) |
 | `items_per_case` | Data | Units per case (for Price/Case calculation) |
 | `package_size` | Data | Size label (e.g. "400 g", "12 oz") |
 
@@ -105,23 +104,36 @@ Query Report in ERPNext — `Inventory Manager` — shows:
 | UPC / Barcode | `tabItem Barcode` child table |
 | Items Per Case | `tabItem.items_per_case` |
 | Package Size | `tabItem.package_size` |
-| Cases On Hand | `tabItem.cases_on_hand` |
-| Price/Item | `tabItem Price` (Standard Selling) |
+| Stock | `SUM(tabBin.actual_qty)`, computed live — not a field on Item |
+| Cost | `tabItem.valuation_rate` |
+| Selling Price | `tabItem Price` (Standard Selling) |
 | Price/Case | `price_list_rate × items_per_case` |
 
-**Invoice deduction:** On Sales Invoice submit, a Server Script deducts invoice qty from `cases_on_hand`. On cancel, it restores.
+Stock is tracked natively (Bin / Stock Ledger Entry), wired via Item Lots — see `scripts/lots/_wire_lot_to_stock.py`. There's no `cases_on_hand` field on Item anymore (a Custom Field, previously used for this) — Custom Fields get serialized into every Item REST response, which wasn't wanted, and `Bin.actual_qty` was always the real source of truth it mirrored. The report just computes it live instead. Cost (`tabItem.valuation_rate`, a core field) is kept in sync with the stock ledger by a scheduled sync (see below) rather than a document-event hook — Bin never fires its own save hooks when updated by Sales Invoice/Stock Reconciliation/etc, and Stock Ledger Entry hooks proved unreliable around cancellations. Submitting a Sales Invoice with "Update Stock" checked (the default) deducts real stock immediately; cost/selling price catch up within a minute.
 
 ---
 
-## Pricing
+## Pricing: Cost, Margin, Selling Price
 
-Prices come from **Toast POS export** (`Data_06_23.csv`, 18 k rows).
+Selling price is derived from cost via a per-item, customizable margin — all native ERPNext fields, no Custom Fields:
 
-Matching logic in `update_prices.py`:
-1. **UPC match** — all normalized variants (strip leading zeros, drop last 2 digits, last 11/12 digits)
-2. **Fuzzy fallback** — Brand containment + description similarity ≥ 0.45 + size within 6%
+| Concept | Field |
+|---|---|
+| Cost | `tabItem.valuation_rate`, weighted-average synced from `tabBin.valuation_rate` |
+| Margin | One `Pricing Rule` per item (named `Margin - <item_code>`), `margin_type` (Percentage/Amount) + `margin_rate_or_amount` |
+| Selling price | `tabItem Price` (Standard Selling), `price_list_rate` = cost × (1 + margin%) or cost + margin$ |
 
-Current coverage: **252 / 323 items** priced. 71 items have no matching Toast entry.
+Kept live by:
+- **Sync Item Stock And Price - Scheduled** (`scripts/inventory/setup_stock_price_scheduled_sync.py`) — a Cron Server Script running every minute, recomputing cost and selling price from `Bin` for every item. Runs on a schedule rather than a document-event hook, since neither `Bin After Save` nor `Stock Ledger Entry After Insert` reliably fire/reflect current state for real ERPNext stock transactions (confirmed by testing).
+- **Sync Item Price - Margin Change** (`Pricing Rule`, After Save, from `scripts/inventory/setup_cost_margin_pricing.py`) — margin edited → re-derive selling price from current cost immediately (this hook fires reliably since editing a Pricing Rule is a normal save).
+
+All 391 items were seeded with a 0%-margin Pricing Rule (selling price = cost until adjusted per item). Cost was initially backfilled from the prior Toast POS / handwritten-scan prices (`update_prices.py`, `_push_scanned_prices.py`) — treated as the cost baseline, not the selling price, going forward. The old `custom_price` Custom Field and the `standard_rate` sync habit have been retired; adding items via the "Quick Add Item" button (`scripts/setup/setup_add_item_form.py`) now wires new items into this same model.
+
+---
+
+## ACH Payments Backend
+
+New serverless stack (Lambda + API Gateway) for bidirectional ACH via **Dwolla + Plaid** — auto-collect from customers, auto-pay vendors. Separate from the EC2 Docker Compose stack since it's event-driven. See `docs/ACH-PAYMENTS-PLAN.md` for full design, `cloudformation/payments-backend.yaml` for infra, `payments/` for Lambda source, and `scripts/setup/setup_ach_payments.py` for the one-time ERPNext custom field / Mode of Payment setup.
 
 ---
 
@@ -226,8 +238,7 @@ All admin scripts read credentials from `os.environ.get("ERP_ADMIN_PWD")`.
 | `tabItem Barcode` empty via REST API | Load barcodes via SSM SQL into `_barcodes.json` cache |
 | UPC stored as float in Excel | Convert: `str(int(float(upc_raw)))` |
 | `tabWebsite Item` doesn't exist on this instance | Wrap each DELETE in try/except |
-| Items are non-stock type | ERPNext stock validation bypassed; `cases_on_hand` custom field used instead |
 
 ---
 
-*Last updated: 2026-06-29*
+*Last updated: 2026-07-06*
