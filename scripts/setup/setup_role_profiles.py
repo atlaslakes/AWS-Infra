@@ -21,9 +21,16 @@ import requests, json, sys
 requests.packages.urllib3.disable_warnings()
 
 URL  = "https://www.karavanimports.com"
+API_KEY    = os.environ.get("ERPNEXT_API_KEY")
+API_SECRET = os.environ.get("ERPNEXT_API_SECRET")
+
 s = requests.Session(); s.verify = False
-s.post(f"{URL}/api/method/login", data={"usr": "Administrator", "pwd": os.environ.get("ERP_ADMIN_PWD")}, timeout=15)
-print("Logged in\n")
+if API_KEY and API_SECRET:
+    s.headers["Authorization"] = f"token {API_KEY}:{API_SECRET}"
+    print("Using API key auth\n")
+else:
+    s.post(f"{URL}/api/method/login", data={"usr": "Administrator", "pwd": os.environ.get("ERP_ADMIN_PWD")}, timeout=15)
+    print("Using password auth\n")
 
 def q(n): return requests.utils.quote(str(n), safe="")
 
@@ -68,9 +75,9 @@ for role in ROLES:
 print("\n=== [2] Role Profiles ===")
 
 PROFILES = {
-    "Inventory": ["Item Manager", "Stock Manager", "Stock User"],
-    "Customer":  ["Customer", "Sales User"],
-    "Accounts":  ["Accounts User", "Accounts Manager", "Sales Manager", "Stock User"],
+    "Inventory":  ["Item Manager", "Stock Manager", "Stock User"],
+    "Customer":   ["Customer", "Sales User"],
+    "Accountant": ["Accounts User", "Accounts Manager", "Sales Manager", "Stock User"],
 }
 
 for profile, roles in PROFILES.items():
@@ -270,12 +277,12 @@ print("""
 Role Profiles wired:
   Inventory  -> Item Manager, Stock Manager, Stock User
   Customer   -> Customer, Sales User
-  Accounts   -> Accounts User, Accounts Manager, Sales Manager, Stock User
+  Accountant -> Accounts User, Accounts Manager, Sales Manager, Stock User
 
 Workspaces updated with role restrictions + shortcuts + links:
   Inventory Manager-Administrator  (Inventory profile)
   Customer Dashboard-Administrator (Customer profile)
-  Accountant-Administrator         (Accounts profile)
+  Accountant-Administrator         (Accountant profile)
 
 Dashboard Charts created (Accountant workspace):
   KI Monthly Sales Revenue  (bar)

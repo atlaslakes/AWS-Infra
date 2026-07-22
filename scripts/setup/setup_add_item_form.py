@@ -4,7 +4,13 @@ Adds "Quick Add Item" to the Inventory Manager workspace:
 
   1. Client Script on Item list view — adds a "Quick Add Item" button
      that opens a dialog with the same fields as the inventory spreadsheet:
-     Item Name, Brand, Item Group, Size, Items/Case, UPC, SKU, Price
+     Item Name, Brand, Item Group, Size, Items/Case, UPC, SKU, Cost
+
+     Cost is written to Item.valuation_rate (no Custom Fields). A 0%-margin
+     Pricing Rule ("Margin - <item_code>") and a matching Item Price
+     (Standard Selling) are created alongside it, so the item is immediately
+     wired into the same cost -> margin -> selling price model set up by
+     scripts/inventory/setup_cost_margin_pricing.py.
 
   2. Updates the Inventory Manager workspace:
      - Shortcuts: Add Item (-> Item list), Items, Stock Entries, Item Price, Warehouses
@@ -16,7 +22,11 @@ requests.packages.urllib3.disable_warnings()
 
 URL  = "https://www.karavanimports.com"
 s = requests.Session(); s.verify = False
-s.post(f"{URL}/api/method/login", data={"usr": "Administrator", "pwd": os.environ.get("ERP_ADMIN_PWD")}, timeout=15)
+login_resp = s.post(f"{URL}/api/method/login",
+                     data={"usr": os.environ.get("ERP_ADMIN_USR", "Administrator"),
+                           "pwd": os.environ.get("ERP_ADMIN_PWD")}, timeout=15)
+if login_resp.status_code != 200:
+    raise SystemExit(f"Login failed {login_resp.status_code}: {login_resp.text[:300]}")
 print("Logged in\n")
 
 def q(n): return requests.utils.quote(str(n), safe="")
@@ -48,6 +58,13 @@ item_groups = [g["name"] for g in ig_resp.json().get("data", [])
 item_groups.sort()
 # Build JS array literal
 ig_js = "[" + ",".join(f'"{g}"' for g in item_groups) + "]"
+
+# Company/currency needed to create a Pricing Rule (mirrors setup_cost_margin_pricing.py)
+gd = s.get(f"{URL}/api/resource/Global Defaults/Global Defaults", timeout=15).json().get("data", {})
+company = gd.get("default_company", "")
+currency = s.get(f"{URL}/api/method/frappe.client.get_value",
+                  params={"doctype": "System Settings", "fieldname": "currency"}, timeout=15) \
+             .json().get("message", {}).get("currency") or "USD"
 
 client_script = f"""
 // Quick Add Item button on Item list view
@@ -108,9 +125,10 @@ frappe.listview_settings['Item'].onload = function(listview) {{
                     fieldtype: 'Data'
                 }},
                 {{
-                    label: 'Our Price',
-                    fieldname: 'custom_price',
-                    fieldtype: 'Currency'
+                    label: 'Cost (per unit)',
+                    fieldname: 'cost',
+                    fieldtype: 'Currency',
+                    description: 'Selling price is derived from this via the item\\'s margin (0% by default \\u2014 adjust the "Margin - <item code>" Pricing Rule afterward).'
                 }}
             ],
             primary_action_label: 'Save Item',
@@ -127,21 +145,66 @@ frappe.listview_settings['Item'].onload = function(listview) {{
                             items_per_case: values.items_per_case || '',
                             custom_barcode: values.custom_barcode || '',
                             custom_sku:    values.custom_sku || '',
-                            custom_price:  values.custom_price || 0,
-                            standard_rate: values.custom_price || 0,
                             is_stock_item: 1,
                             stock_uom:     'Nos'
                         }}
                     }},
                     callback: function(r) {{
-                        if (r.message) {{
-                            frappe.show_alert({{
-                                message: 'Item added: ' + r.message.item_name + ' (' + r.message.name + ')',
-                                indicator: 'green'
-                            }}, 5);
-                            d.hide();
-                            listview.refresh();
-                        }}
+                        if (!r.message) return;
+                        var item_code = r.message.name;
+                        var cost = flt(values.cost) || 0;
+
+                        frappe.show_alert({{
+                            message: 'Item added: ' + r.message.item_name + ' (' + item_code + ')',
+                            indicator: 'green'
+                        }}, 5);
+                        d.hide();
+                        listview.refresh();
+
+                        if (cost <= 0) return;
+
+                        // New item has no stock yet, so there's no Bin to sync
+                        // valuation_rate from -- set it directly.
+                        frappe.call({{
+                            method: 'frappe.client.set_value',
+                            args: {{ doctype: 'Item', name: item_code, fieldname: 'valuation_rate', value: cost }}
+                        }});
+
+                        // 0% margin Pricing Rule, same as the bulk setup in
+                        // setup_cost_margin_pricing.py -- selling price starts
+                        // equal to cost until the margin is adjusted.
+                        frappe.call({{
+                            method: 'frappe.client.insert',
+                            args: {{
+                                doc: {{
+                                    doctype: 'Pricing Rule',
+                                    title: 'Margin - ' + item_code,
+                                    apply_on: 'Item Code',
+                                    items: [{{ item_code: item_code }}],
+                                    selling: 1,
+                                    price_or_product_discount: 'Price',
+                                    margin_type: 'Percentage',
+                                    margin_rate_or_amount: 0,
+                                    rate_or_discount: 'Discount Percentage',
+                                    discount_percentage: 0,
+                                    company: '{company}',
+                                    currency: '{currency}'
+                                }}
+                            }}
+                        }});
+
+                        frappe.call({{
+                            method: 'frappe.client.insert',
+                            args: {{
+                                doc: {{
+                                    doctype: 'Item Price',
+                                    item_code: item_code,
+                                    price_list: 'Standard Selling',
+                                    selling: 1,
+                                    price_list_rate: cost
+                                }}
+                            }}
+                        }});
                     }},
                     error: function(r) {{
                         frappe.msgprint('Error saving item: ' + (r.message || r.exc || 'Unknown error'));
@@ -226,8 +289,10 @@ Client Script added to Item list view:
   -> A "Quick Add Item" button appears in the top bar
   -> Clicking it opens a dialog with these fields:
        Item Name (required), Brand, Item Group (required),
-       Size, Items Per Case, UPC/Barcode, SKU, Our Price
-  -> Item is saved immediately and the list refreshes
+       Size, Items Per Case, UPC/Barcode, SKU, Cost
+  -> Item is saved immediately; if Cost is set, Item.valuation_rate,
+     a 0%-margin Pricing Rule, and an Item Price (Standard Selling)
+     are created so the item is live in the cost/margin/price model
 
 Inventory Manager workspace:
   Shortcuts: Add Item, Items, Stock Entries, Item Price, Warehouses
