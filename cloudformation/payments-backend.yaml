@@ -16,7 +16,7 @@ Parameters:
 
   ERPNextURL:
     Type: String
-    Default: https://www.karavanimports.com
+    Default: https://erpnext.karavanimports.com
     Description: Base URL of the ERPNext site the Lambdas call.
 
   CodeS3Bucket:

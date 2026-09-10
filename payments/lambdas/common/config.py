@@ -22,7 +22,7 @@ def load_secrets():
 def erpnext_config():
     secrets = load_secrets()
     return {
-        "url": os.environ.get("ERPNEXT_URL", "https://www.karavanimports.com"),
+        "url": os.environ.get("ERPNEXT_URL", "https://erpnext.karavanimports.com"),
         "api_key": secrets["erpnext_api_key"],
         "api_secret": secrets["erpnext_api_secret"],
     }

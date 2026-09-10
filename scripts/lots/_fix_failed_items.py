@@ -7,7 +7,7 @@ import requests, openpyxl, boto3, base64, time, json
 import urllib3; urllib3.disable_warnings()
 from collections import Counter
 
-URL  = "https://www.karavanimports.com"
+URL  = "https://erpnext.karavanimports.com"
 s    = requests.Session(); s.verify = False
 s.post(f"{URL}/api/method/login", data={"usr": "Administrator", "pwd": os.environ.get("ERP_ADMIN_PWD")}, timeout=15)
 print("Logged in")

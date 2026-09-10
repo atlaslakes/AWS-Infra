@@ -2,7 +2,7 @@ import os
 import requests, json
 requests.packages.urllib3.disable_warnings()
 
-INSTANCES = ["https://www.karavanimports.com", "http://3.216.86.193"]
+INSTANCES = ["https://erpnext.karavanimports.com", "http://3.216.86.193"]
 PASS = os.environ.get("ERP_ADMIN_PWD")
 
 STOCK_ENTRY_SUBMIT_SCRIPT = '''\

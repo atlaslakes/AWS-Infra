@@ -1,7 +1,7 @@
 import os
 import requests, json
 requests.packages.urllib3.disable_warnings()
-URL = "https://www.karavanimports.com"
+URL = "https://erpnext.karavanimports.com"
 s = requests.Session(); s.verify = False
 
 # Login

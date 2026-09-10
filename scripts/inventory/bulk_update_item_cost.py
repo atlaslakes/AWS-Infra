@@ -25,7 +25,7 @@ Usage:
 import os, sys, csv, argparse, requests
 import urllib3; urllib3.disable_warnings()
 
-PROD_URL = "https://www.karavanimports.com"
+PROD_URL = "https://erpnext.karavanimports.com"
 PRICE_LIST = "Standard Selling"
 
 

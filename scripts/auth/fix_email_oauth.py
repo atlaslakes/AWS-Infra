@@ -19,7 +19,7 @@ After running this script you must re-authenticate once:
 import requests, json, sys
 
 requests.packages.urllib3.disable_warnings()
-URL  = "https://www.karavanimports.com"
+URL  = "https://erpnext.karavanimports.com"
 PASS = os.environ.get("ERP_ADMIN_PWD")
 
 CLIENT_ID     = os.environ.get("GOOGLE_CLIENT_ID")
@@ -192,7 +192,7 @@ REQUIRED — add this URI to Google Cloud Console (if not already there):
     4. Save
 
 REQUIRED — re-authenticate OAuth in ERPNext:
-  1. Go to https://www.karavanimports.com/app/email-account/Karavan Imports
+  1. Go to https://erpnext.karavanimports.com/app/email-account/Karavan Imports
   2. Click "Authenticate" (top-right of the form)
   3. Sign in with accounting@karavanimports.com in the Google popup
   4. Grant mail permissions

@@ -1,9 +1,9 @@
 import requests, json
 requests.packages.urllib3.disable_warnings()
 s = requests.Session(); s.verify = False
-s.post('https://www.karavanimports.com/api/method/login', data={'usr':'Administrator','pwd':'TempMigrate2026!'}, timeout=15)
+s.post('https://erpnext.karavanimports.com/api/method/login', data={'usr':'Administrator','pwd':'TempMigrate2026!'}, timeout=15)
 
-ws = s.get('https://www.karavanimports.com/api/resource/Workspace/Stock', timeout=15).json().get('data', {})
+ws = s.get('https://erpnext.karavanimports.com/api/resource/Workspace/Stock', timeout=15).json().get('data', {})
 content  = json.loads(ws.get('content') or '[]')
 shortcuts = ws.get('shortcuts', [])
 
@@ -27,5 +27,5 @@ for sc in shortcuts:
 # Also call clear cache
 print()
 print("Clearing Frappe cache...")
-r = s.post('https://www.karavanimports.com/api/method/frappe.sessions.clear', timeout=15)
+r = s.post('https://erpnext.karavanimports.com/api/method/frappe.sessions.clear', timeout=15)
 print("clear_cache:", r.status_code)

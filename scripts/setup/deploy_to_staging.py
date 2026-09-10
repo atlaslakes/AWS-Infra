@@ -1,7 +1,7 @@
 import os
 """
 Deploys all Karavan customizations from production to staging instance.
-  Production : https://www.karavanimports.com
+  Production : https://erpnext.karavanimports.com
   Staging    : http://3.216.86.193
 
 Applies:
@@ -15,7 +15,7 @@ import requests, json, sys
 
 requests.packages.urllib3.disable_warnings()
 
-PROD = "https://www.karavanimports.com"
+PROD = "https://erpnext.karavanimports.com"
 STAG = "http://3.216.86.193"
 PASS = os.environ.get("ERP_ADMIN_PWD")
 

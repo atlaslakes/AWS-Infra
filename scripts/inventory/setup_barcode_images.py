@@ -35,7 +35,7 @@ import urllib3; urllib3.disable_warnings()
 import barcode
 from barcode.writer import ImageWriter
 
-URL = "https://www.karavanimports.com"
+URL = "https://erpnext.karavanimports.com"
 WORKERS = 8
 
 

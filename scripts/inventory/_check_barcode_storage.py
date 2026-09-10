@@ -132,7 +132,7 @@ with open(out_path, "w", newline="", encoding="utf-8") as f:
 print(f"Written to {out_path}")
 
 # ── 6. Push UPCs to ERPNext ───────────────────────────────────────────────────
-URL = "https://www.karavanimports.com"
+URL = "https://erpnext.karavanimports.com"
 s = requests.Session(); s.verify = False
 s.post(f"{URL}/api/method/login", data={"usr": "Administrator", "pwd": "TempMigrate2026!"}, timeout=15)
 

@@ -28,7 +28,7 @@ Run once against the site:
 import requests, sys
 requests.packages.urllib3.disable_warnings()
 
-URL = "https://www.karavanimports.com"
+URL = "https://erpnext.karavanimports.com"
 s = requests.Session(); s.verify = False
 
 login_resp = s.post(f"{URL}/api/method/login",

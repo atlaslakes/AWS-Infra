@@ -17,7 +17,7 @@ Run:
 import csv, requests
 requests.packages.urllib3.disable_warnings()
 
-URL = "https://www.karavanimports.com"
+URL = "https://erpnext.karavanimports.com"
 CSV_PATH = "../../data/Karavan Inventory-RECENT.csv"
 
 s = requests.Session(); s.verify = False

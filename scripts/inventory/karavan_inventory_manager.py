@@ -11,7 +11,7 @@ import requests, json, time
 
 requests.packages.urllib3.disable_warnings()
 
-PROD_URL = "https://www.karavanimports.com"
+PROD_URL = "https://erpnext.karavanimports.com"
 PASS     = os.environ.get("ERP_ADMIN_PWD")
 
 GROUP_ABBR = {

@@ -52,7 +52,7 @@ Env: ERP_ADMIN_PWD
 import requests, sys
 requests.packages.urllib3.disable_warnings()
 
-URL  = "https://www.karavanimports.com"
+URL  = "https://erpnext.karavanimports.com"
 PASS = os.environ.get("ERP_ADMIN_PWD")
 if not PASS:
     sys.exit("Set ERP_ADMIN_PWD")

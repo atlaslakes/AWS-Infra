@@ -24,7 +24,7 @@ def ssm_py(py, wait=20, timeout=120):
     return "Timeout","",""
 
 # rebuild full item list to find the 4 missing ones
-URL = "https://www.karavanimports.com"
+URL = "https://erpnext.karavanimports.com"
 s = requests.Session(); s.verify = False
 s.post(f"{URL}/api/method/login", data={"usr":"Administrator","pwd":os.environ.get("ERP_ADMIN_PWD")}, timeout=15)
 existing = set()

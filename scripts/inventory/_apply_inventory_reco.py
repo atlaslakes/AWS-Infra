@@ -5,7 +5,7 @@ Runs batches of 20 items via SSM inside the container to avoid timeouts.
 import os, requests, csv, boto3, base64, time, json, math
 import urllib3; urllib3.disable_warnings()
 
-URL = "https://www.karavanimports.com"
+URL = "https://erpnext.karavanimports.com"
 s = requests.Session(); s.verify = False
 s.post(f"{URL}/api/method/login", data={"usr": "Administrator", "pwd": os.environ.get("ERP_ADMIN_PWD")}, timeout=15)
 

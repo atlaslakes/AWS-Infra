@@ -15,7 +15,7 @@ import requests, csv, json, datetime
 
 CSV_PATH  = r"C:\Users\aizen\Desktop\AWS\aws-infra\Karavan Inventory - Sheet1.csv"
 WAREHOUSE = "Stores - AL"
-URL       = "https://www.karavanimports.com"
+URL       = "https://erpnext.karavanimports.com"
 PASS      = os.environ.get("ERP_ADMIN_PWD")
 
 requests.packages.urllib3.disable_warnings()

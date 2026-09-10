@@ -15,7 +15,7 @@ from collections import Counter
 
 requests.packages.urllib3.disable_warnings()
 
-PROD_URL = "https://www.karavanimports.com"
+PROD_URL = "https://erpnext.karavanimports.com"
 PASS     = os.environ.get("ERP_ADMIN_PWD")
 CSV_PATH = Path(r"C:\Users\aizen\Desktop\AWS\aws-infra\Karavan Inventory - Sheet1.csv")
 

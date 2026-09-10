@@ -22,7 +22,7 @@ import os, sys, json, requests
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import urllib3; urllib3.disable_warnings()
 
-URL = "https://www.karavanimports.com"
+URL = "https://erpnext.karavanimports.com"
 BARCODE_TYPE = "UPC"
 WORKERS = 8
 

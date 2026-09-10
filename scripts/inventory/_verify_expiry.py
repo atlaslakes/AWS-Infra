@@ -3,7 +3,7 @@ import requests
 requests.packages.urllib3.disable_warnings()
 
 INSTANCES = {
-    "PROD":    "https://www.karavanimports.com",
+    "PROD":    "https://erpnext.karavanimports.com",
     "STAGING": "http://3.216.86.193",
 }
 PASS = os.environ.get("ERP_ADMIN_PWD")

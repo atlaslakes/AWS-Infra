@@ -2,7 +2,7 @@ import os
 import requests, json
 requests.packages.urllib3.disable_warnings()
 
-URL  = "https://www.karavanimports.com"
+URL  = "https://erpnext.karavanimports.com"
 PASS = os.environ.get("ERP_ADMIN_PWD")
 
 s = requests.Session(); s.verify = False

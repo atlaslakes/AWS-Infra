@@ -9,7 +9,7 @@ import json
 import sys
 
 POC_URL = "http://3.216.86.193"
-PROD_URL = "https://www.karavanimports.com"
+PROD_URL = "https://erpnext.karavanimports.com"
 ADMIN_PASS = os.environ.get("ERP_ADMIN_PWD")
 
 session_poc = requests.Session()

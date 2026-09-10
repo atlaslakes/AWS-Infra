@@ -20,7 +20,7 @@ All roles get desk_access=1 so users stay as System Users.
 import requests, json, sys
 requests.packages.urllib3.disable_warnings()
 
-URL  = "https://www.karavanimports.com"
+URL  = "https://erpnext.karavanimports.com"
 API_KEY    = os.environ.get("ERPNEXT_API_KEY")
 API_SECRET = os.environ.get("ERPNEXT_API_SECRET")
 
