@@ -299,7 +299,12 @@ Group 1 fixes applied to the Lambda handlers:
 - `payments/build.sh` builds the deploy zip (deps + handler packages at the root); must run on Linux x86_64 (CI does; Docker one-liner in the script header otherwise).
 - `.github/workflows/deploy-payments.yml` builds, uploads to `s3://$LAMBDA_ARTIFACTS_BUCKET/payments/<env>/<sha>.zip`, and `cloudformation deploy`s `payments-<env>`. Triggers on push to `payments/**` / the template, or `workflow_dispatch` (dev/prod). Required GH secrets/vars are listed in `payments/README.md`.
 
-Still open (later groups): secrets-as-CFN-parameters (move to populate-out-of-band), Dwolla webhook-subscription script, master funding source verification, KYB/KYC tier + NACHA authorization capture.
+### Dwolla webhook + master funding source (done — group 4)
+
+- `scripts/setup/setup_dwolla_webhook.py` — creates the Dwolla webhook subscription pointing at the deployed API's `/webhooks/dwolla` (nothing created it before, so transfers would never reconcile), and un-pauses it (Dwolla pauses a subscription after ~200 delivery failures). `--list` / `--rotate` / `--delete`.
+- `scripts/setup/verify_dwolla_master.py` — completes micro-deposit verification of the master funding source (`setup_dwolla_master_account.py` leaves it `unverified`, which blocks every transfer). Auto-completes in sandbox; `--init` then `--amounts A B` for production.
+
+Still open (later groups): secrets-as-CFN-parameters (move to populate-out-of-band), KYB/KYC tier + NACHA authorization capture.
 
 ---
 
