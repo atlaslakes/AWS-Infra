@@ -41,6 +41,7 @@ URL = "https://erpnext.karavanimports.com"
 INVOICE_PRINT_FORMAT = "Atlas Invoice Tracking Classic"
 INVOICE_NOTIFICATION = "Auto Send Sales Invoice to Customer"
 INVOICE_SENDER_ACCOUNT = "Invoices - Karavan"
+INVOICE_SENDER_EMAIL = "invoice@karavanimports.com"
 # "Accounting - Karavan" is deliberately excluded: it's a stale Basic-auth
 # account with no stored password, so any save rejects with "Password not
 # found". It plays no part in the routing plan — delete it in the UI if unused.
@@ -88,6 +89,10 @@ def patch(dt, name, doc):
 
 
 print("=== [1] Notification: Auto Send Sales Invoice to Customer ===")
+# sender_email must be set explicitly — on Frappe 15.112.0 a REST write of the
+# `sender` link alone leaves `sender_email` NULL, and the notification's send
+# path only uses the account when BOTH are set; otherwise it silently falls back
+# to the default outgoing account (adminuser@atlaslakes.com).
 patch("Notification", INVOICE_NOTIFICATION, {
     "doctype": "Notification",
     "is_standard": 0,
@@ -96,6 +101,7 @@ patch("Notification", INVOICE_NOTIFICATION, {
     "attach_print": 1,
     "print_format": INVOICE_PRINT_FORMAT,
     "sender": INVOICE_SENDER_ACCOUNT,
+    "sender_email": INVOICE_SENDER_EMAIL,
     "condition": "doc.contact_email",
     "recipients": [
         {"doctype": "Notification Recipient", "receiver_by_document_field": "contact_email"},
@@ -117,9 +123,11 @@ print("""
 === Done ===
 
 Invoice emails now: attach '%s', go to the invoice's Contact Email, and are
-sent from '%s' (invoice@karavanimports.com). Submit a Sales Invoice that has a
-Contact Email to test — confirm From is invoice@karavanimports.com with no
-Reply-To: adminuser@ line.
+sent from '%s' (invoice@karavanimports.com). Verified on a live send:
+  From:     Invoices Karavan <invoice@karavanimports.com>
+  Reply-To: invoice@karavanimports.com
+The attached PDF is rendered by the scheduler at send time (the queued row's
+`attachments` carries the print-format spec).
 
 Still manual:
   * default_outgoing is still 'Karavan Imports' (adminuser@atlaslakes.com).
