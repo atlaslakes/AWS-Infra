@@ -27,70 +27,17 @@ Parameters:
     Type: String
     Description: S3 key of the packaged payments/ Lambda deployment zip (built from payments/ + payments/requirements.txt).
 
-  DwollaKey:
-    Type: String
-    NoEcho: true
-    Description: Dwolla application key (sandbox or production, matching DwollaEnvironment).
-
-  DwollaSecret:
-    Type: String
-    NoEcho: true
-    Description: Dwolla application secret.
-
-  DwollaEnvironment:
-    Type: String
-    AllowedValues:
-      - sandbox
-      - production
-    Default: sandbox
-
-  DwollaWebhookSecret:
-    Type: String
-    NoEcho: true
-    Description: Shared secret used to verify the X-Request-Signature-SHA256 header on Dwolla webhooks.
-
-  DwollaMasterFundingSourceUrl:
-    Type: String
-    Description: Dwolla funding-source URL for Atlas Lakes' own verified business bank account.
-
-  PlaidClientId:
-    Type: String
-    NoEcho: true
-
-  PlaidSecret:
-    Type: String
-    NoEcho: true
-
-  PlaidEnvironment:
-    Type: String
-    AllowedValues:
-      - sandbox
-      - development
-      - production
-    Default: sandbox
-
-  ERPNextPaymentsApiKey:
-    Type: String
-    NoEcho: true
-    Description: API key for the restricted "Payments Integration" ERPNext user created by scripts/setup/setup_ach_payments.py.
-
-  ERPNextPaymentsApiSecret:
-    Type: String
-    NoEcho: true
-
-  Base44SharedSecret:
-    Type: String
-    NoEcho: true
-    Description: >
-      Shared secret Base44 must send as the X-Api-Key header on POST /link-token
-      and POST /exchange-and-attach. Those endpoints are otherwise open to the
-      internet. Generate a long random value; the Lambdas fail closed if it is
-      unset (unless ALLOW_UNAUTHENTICATED_CALLERS=true, sandbox only).
-
   NotificationEmail:
     Type: String
     Default: ''
     Description: Email address for CloudWatch alarm notifications on Lambda errors. Leave blank to disable.
+
+  # NOTE: Dwolla / Plaid / ERPNext / Base44 credentials are NOT template
+  # parameters — they used to be, which left them retrievable via
+  # describe-stacks and change-set history. They now live only in the
+  # PaymentsSecret value, populated out-of-band after deploy (see
+  # .github/workflows/deploy-payments.yml and payments/README.md). The JSON
+  # shape the Lambdas expect is documented on the PaymentsSecret resource below.
 
 Metadata:
   AWS::CloudFormation::Interface:
@@ -106,29 +53,6 @@ Metadata:
           - CodeS3Bucket
           - CodeS3Key
       - Label:
-          default: Dwolla
-        Parameters:
-          - DwollaKey
-          - DwollaSecret
-          - DwollaEnvironment
-          - DwollaWebhookSecret
-          - DwollaMasterFundingSourceUrl
-      - Label:
-          default: Plaid
-        Parameters:
-          - PlaidClientId
-          - PlaidSecret
-          - PlaidEnvironment
-      - Label:
-          default: ERPNext credentials
-        Parameters:
-          - ERPNextPaymentsApiKey
-          - ERPNextPaymentsApiSecret
-      - Label:
-          default: Caller auth
-        Parameters:
-          - Base44SharedSecret
-      - Label:
           default: Monitoring
         Parameters:
           - NotificationEmail
@@ -141,21 +65,16 @@ Resources:
   PaymentsSecret:
     Type: AWS::SecretsManager::Secret
     Properties:
-      Description: Dwolla/Plaid/ERPNext credentials for the ACH payments backend Lambdas.
-      SecretString: !Sub |
-        {
-          "dwolla_key": "${DwollaKey}",
-          "dwolla_secret": "${DwollaSecret}",
-          "dwolla_environment": "${DwollaEnvironment}",
-          "dwolla_webhook_secret": "${DwollaWebhookSecret}",
-          "dwolla_master_funding_source_url": "${DwollaMasterFundingSourceUrl}",
-          "plaid_client_id": "${PlaidClientId}",
-          "plaid_secret": "${PlaidSecret}",
-          "plaid_env": "${PlaidEnvironment}",
-          "erpnext_api_key": "${ERPNextPaymentsApiKey}",
-          "erpnext_api_secret": "${ERPNextPaymentsApiSecret}",
-          "base44_shared_secret": "${Base44SharedSecret}"
-        }
+      Description: >
+        Credentials for the ACH payments Lambdas. The VALUE is populated
+        out-of-band after stack deploy (deploy-payments.yml / payments/README.md)
+        — never via a CloudFormation parameter. CloudFormation manages only the
+        secret container, so a redeploy does not overwrite the value.
+        Expected JSON keys:
+          dwolla_key, dwolla_secret, dwolla_environment ("sandbox"|"production"),
+          dwolla_webhook_secret, dwolla_master_funding_source_url,
+          plaid_client_id, plaid_secret, plaid_env,
+          erpnext_api_key, erpnext_api_secret, base44_shared_secret
 
   PaymentsLambdaRole:
     Type: AWS::IAM::Role

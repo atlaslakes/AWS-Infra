@@ -304,7 +304,12 @@ Group 1 fixes applied to the Lambda handlers:
 - `scripts/setup/setup_dwolla_webhook.py` — creates the Dwolla webhook subscription pointing at the deployed API's `/webhooks/dwolla` (nothing created it before, so transfers would never reconcile), and un-pauses it (Dwolla pauses a subscription after ~200 delivery failures). `--list` / `--rotate` / `--delete`.
 - `scripts/setup/verify_dwolla_master.py` — completes micro-deposit verification of the master funding source (`setup_dwolla_master_account.py` leaves it `unverified`, which blocks every transfer). Auto-completes in sandbox; `--init` then `--amounts A B` for production.
 
-Still open (later groups): secrets-as-CFN-parameters (move to populate-out-of-band), KYB/KYC tier + NACHA authorization capture.
+### NACHA authorization + secrets out of CloudFormation (done — group 5)
+
+- **Customer debits require a retained authorization.** New Customer fields `custom_ach_authorization_{date,ip,text,reference}` (`setup_ach_payments.py`); Base44 writes them when the customer accepts autopay. `autopay-scan` skips any `collect` transfer for a customer without `custom_ach_authorization_date` (listed under the run's `skipped`, no alarm). Vendor payouts unaffected.
+- **Credentials are no longer CloudFormation parameters.** They used to be passed as `NoEcho` params, which still left them retrievable via `describe-stacks` / change-set history. The template now creates `PaymentsSecret` as an empty container and never sets its value; `deploy-payments.yml` populates it out-of-band with `aws secretsmanager put-secret-value` after deploy. A redeploy can't clobber the value.
+
+**Still procedural (business, not code):** Dwolla Business Verification (KYB) for Atlas Lakes before any production transfer; per-party KYC / Dwolla customer tier for invoices above the unverified send/receive caps; retaining the NACHA authorization text/records that Base44 now captures.
 
 ---
 

@@ -80,21 +80,49 @@ jobs:
               ERPNextURL=${{ vars.ERPNEXT_URL }} \
               CodeS3Bucket=${{ secrets.LAMBDA_ARTIFACTS_BUCKET }} \
               CodeS3Key=${CODE_S3_KEY} \
-              DwollaKey=${{ secrets.DWOLLA_KEY }} \
-              DwollaSecret=${{ secrets.DWOLLA_SECRET }} \
-              DwollaEnvironment=${{ vars.DWOLLA_ENVIRONMENT }} \
-              DwollaWebhookSecret=${{ secrets.DWOLLA_WEBHOOK_SECRET }} \
-              DwollaMasterFundingSourceUrl=${{ secrets.DWOLLA_MASTER_FUNDING_SOURCE_URL }} \
-              PlaidClientId=${{ secrets.PLAID_CLIENT_ID }} \
-              PlaidSecret=${{ secrets.PLAID_SECRET }} \
-              PlaidEnvironment=${{ vars.PLAID_ENVIRONMENT }} \
-              ERPNextPaymentsApiKey=${{ secrets.ERPNEXT_PAYMENTS_API_KEY }} \
-              ERPNextPaymentsApiSecret=${{ secrets.ERPNEXT_PAYMENTS_API_SECRET }} \
-              Base44SharedSecret=${{ secrets.BASE44_SHARED_SECRET }} \
               NotificationEmail=${{ secrets.NOTIFICATION_EMAIL }}
 
       # CodeS3Key is a template parameter keyed on the commit SHA, so every deploy
       # changes each function's Code.S3Key and CloudFormation redeploys the code.
+
+      - name: Populate PaymentsSecret (out of band — never a CFN parameter)
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.action != 'validate-only' }}
+        env:
+          DWOLLA_KEY: ${{ secrets.DWOLLA_KEY }}
+          DWOLLA_SECRET: ${{ secrets.DWOLLA_SECRET }}
+          DWOLLA_ENVIRONMENT: ${{ vars.DWOLLA_ENVIRONMENT }}
+          DWOLLA_WEBHOOK_SECRET: ${{ secrets.DWOLLA_WEBHOOK_SECRET }}
+          DWOLLA_MASTER_FUNDING_SOURCE_URL: ${{ secrets.DWOLLA_MASTER_FUNDING_SOURCE_URL }}
+          PLAID_CLIENT_ID: ${{ secrets.PLAID_CLIENT_ID }}
+          PLAID_SECRET: ${{ secrets.PLAID_SECRET }}
+          PLAID_ENVIRONMENT: ${{ vars.PLAID_ENVIRONMENT }}
+          ERPNEXT_PAYMENTS_API_KEY: ${{ secrets.ERPNEXT_PAYMENTS_API_KEY }}
+          ERPNEXT_PAYMENTS_API_SECRET: ${{ secrets.ERPNEXT_PAYMENTS_API_SECRET }}
+          BASE44_SHARED_SECRET: ${{ secrets.BASE44_SHARED_SECRET }}
+        run: |
+          SECRET_ARN=$(aws cloudformation describe-stacks \
+            --stack-name "payments-${ENVIRONMENT}" \
+            --query "Stacks[0].Outputs[?OutputKey=='PaymentsSecretArn'].OutputValue" \
+            --output text)
+          SECRET_JSON=$(jq -n \
+            --arg dwolla_key "$DWOLLA_KEY" \
+            --arg dwolla_secret "$DWOLLA_SECRET" \
+            --arg dwolla_environment "$DWOLLA_ENVIRONMENT" \
+            --arg dwolla_webhook_secret "$DWOLLA_WEBHOOK_SECRET" \
+            --arg dwolla_master_funding_source_url "$DWOLLA_MASTER_FUNDING_SOURCE_URL" \
+            --arg plaid_client_id "$PLAID_CLIENT_ID" \
+            --arg plaid_secret "$PLAID_SECRET" \
+            --arg plaid_env "$PLAID_ENVIRONMENT" \
+            --arg erpnext_api_key "$ERPNEXT_PAYMENTS_API_KEY" \
+            --arg erpnext_api_secret "$ERPNEXT_PAYMENTS_API_SECRET" \
+            --arg base44_shared_secret "$BASE44_SHARED_SECRET" \
+            '{$dwolla_key,$dwolla_secret,$dwolla_environment,$dwolla_webhook_secret,
+              $dwolla_master_funding_source_url,$plaid_client_id,$plaid_secret,$plaid_env,
+              $erpnext_api_key,$erpnext_api_secret,$base44_shared_secret}')
+          aws secretsmanager put-secret-value \
+            --secret-id "$SECRET_ARN" \
+            --secret-string "$SECRET_JSON" >/dev/null
+          echo "PaymentsSecret updated (values not printed)."
 
       - name: Show stack outputs
         if: ${{ github.event_name != 'workflow_dispatch' || inputs.action != 'validate-only' }}
