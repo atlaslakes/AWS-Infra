@@ -1,0 +1,104 @@
+name: Deploy ACH Payments Backend
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'payments/**'
+      - 'cloudformation/payments-backend.yaml'
+      - '.github/workflows/deploy-payments.yml'
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Target environment
+        required: true
+        default: dev
+        type: choice
+        options:
+          - dev
+          - prod
+      action:
+        description: Stack action
+        required: true
+        default: deploy
+        type: choice
+        options:
+          - deploy
+          - validate-only
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  deploy:
+    name: Build + Deploy Payments Stack
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment || 'dev' }}
+    env:
+      AWS_REGION: us-east-1
+      TEMPLATE_FILE: cloudformation/payments-backend.yaml
+      ENVIRONMENT: ${{ inputs.environment || 'dev' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Validate CloudFormation template
+        run: aws cloudformation validate-template --template-body file://${{ env.TEMPLATE_FILE }}
+
+      - name: Build Lambda package
+        run: |
+          bash payments/build.sh "$GITHUB_WORKSPACE/payments-lambda.zip"
+          echo "CODE_S3_KEY=payments/${ENVIRONMENT}/${GITHUB_SHA}.zip" >> "$GITHUB_ENV"
+
+      - name: Upload package to S3
+        run: |
+          aws s3 cp "$GITHUB_WORKSPACE/payments-lambda.zip" \
+            "s3://${{ secrets.LAMBDA_ARTIFACTS_BUCKET }}/${CODE_S3_KEY}"
+
+      - name: Deploy stack
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.action != 'validate-only' }}
+        run: |
+          aws cloudformation deploy \
+            --stack-name "payments-${ENVIRONMENT}" \
+            --template-file "${{ env.TEMPLATE_FILE }}" \
+            --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM \
+            --parameter-overrides \
+              Environment=${ENVIRONMENT} \
+              ERPNextURL=${{ vars.ERPNEXT_URL }} \
+              CodeS3Bucket=${{ secrets.LAMBDA_ARTIFACTS_BUCKET }} \
+              CodeS3Key=${CODE_S3_KEY} \
+              DwollaKey=${{ secrets.DWOLLA_KEY }} \
+              DwollaSecret=${{ secrets.DWOLLA_SECRET }} \
+              DwollaEnvironment=${{ vars.DWOLLA_ENVIRONMENT }} \
+              DwollaWebhookSecret=${{ secrets.DWOLLA_WEBHOOK_SECRET }} \
+              DwollaMasterFundingSourceUrl=${{ secrets.DWOLLA_MASTER_FUNDING_SOURCE_URL }} \
+              PlaidClientId=${{ secrets.PLAID_CLIENT_ID }} \
+              PlaidSecret=${{ secrets.PLAID_SECRET }} \
+              PlaidEnvironment=${{ vars.PLAID_ENVIRONMENT }} \
+              ERPNextPaymentsApiKey=${{ secrets.ERPNEXT_PAYMENTS_API_KEY }} \
+              ERPNextPaymentsApiSecret=${{ secrets.ERPNEXT_PAYMENTS_API_SECRET }} \
+              Base44SharedSecret=${{ secrets.BASE44_SHARED_SECRET }} \
+              NotificationEmail=${{ secrets.NOTIFICATION_EMAIL }}
+
+      # CodeS3Key is a template parameter keyed on the commit SHA, so every deploy
+      # changes each function's Code.S3Key and CloudFormation redeploys the code.
+
+      - name: Show stack outputs
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.action != 'validate-only' }}
+        run: |
+          aws cloudformation describe-stacks \
+            --stack-name "payments-${ENVIRONMENT}" \
+            --query 'Stacks[0].Outputs' --output table

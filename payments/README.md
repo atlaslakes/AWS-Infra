@@ -32,12 +32,35 @@ python -c "from lambdas.autopay_scan.handler import handler; print(handler({}, N
 
 (This bypasses Secrets Manager — you'll need to stub `common.config.load_secrets()` or set `PAYMENTS_SECRET_ARN` and have AWS credentials available.)
 
-## Deploying
+## Building & deploying
 
-There is no build pipeline yet. To deploy a change:
-1. `pip install -r requirements.txt -t build/` then copy `lambdas/` into `build/`
-2. Zip `build/` and upload to the `CodeS3Bucket`/`CodeS3Key` referenced by `cloudformation/payments-backend.yaml`
-3. `aws cloudformation deploy --template-file cloudformation/payments-backend.yaml ...` (see parameters in the template)
+`payments/build.sh [out.zip]` produces the deploy zip — dependencies + the
+handler packages at the zip root (handler paths are `<pkg>.handler.handler`).
+It installs deps for the running interpreter, so **run it on Linux x86_64**
+(CI does). On macOS/Windows use the Docker one-liner in the script header.
+
+CI: `.github/workflows/deploy-payments.yml` runs on push to `payments/**` or
+`cloudformation/payments-backend.yaml` (and via `workflow_dispatch` with a
+`dev`/`prod` choice). It builds the zip, uploads it to
+`s3://$LAMBDA_ARTIFACTS_BUCKET/payments/<env>/<sha>.zip`, and
+`aws cloudformation deploy`s the stack. `CodeS3Key` is keyed on the commit SHA,
+so every run redeploys the function code.
+
+Required GitHub config for the workflow:
+
+| Kind | Name |
+|---|---|
+| secret | `AWS_DEPLOY_ROLE_ARN`, `LAMBDA_ARTIFACTS_BUCKET`, `DWOLLA_KEY`, `DWOLLA_SECRET`, `DWOLLA_WEBHOOK_SECRET`, `DWOLLA_MASTER_FUNDING_SOURCE_URL`, `PLAID_CLIENT_ID`, `PLAID_SECRET`, `ERPNEXT_PAYMENTS_API_KEY`, `ERPNEXT_PAYMENTS_API_SECRET`, `BASE44_SHARED_SECRET`, `NOTIFICATION_EMAIL` |
+| variable | `ERPNEXT_URL`, `DWOLLA_ENVIRONMENT`, `PLAID_ENVIRONMENT` |
+
+Manual one-off:
+```bash
+bash payments/build.sh /tmp/p.zip
+aws s3 cp /tmp/p.zip s3://$BUCKET/payments/dev/manual.zip
+aws cloudformation deploy --template-file cloudformation/payments-backend.yaml \
+  --stack-name payments-dev --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM \
+  --parameter-overrides Environment=dev CodeS3Bucket=$BUCKET CodeS3Key=payments/dev/manual.zip ...
+```
 
 ## Data model this backend depends on
 

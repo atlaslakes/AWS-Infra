@@ -32,6 +32,11 @@ _migrate.tgz
 *.txt
 !requirements*.txt
 scripts/setup/.test_ach_sandbox_state.json
+
+# Lambda build artifacts
+payments/build/
+payments/dist/
+payments-lambda.zip
 icon_b64.txt
 tight_b64.txt
 

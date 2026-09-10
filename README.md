@@ -294,7 +294,12 @@ Group 1 fixes applied to the Lambda handlers:
 - Re-linking an already-attached bank (`DuplicateResource`) now **reuses the existing funding source** instead of 500ing / orphaning a second one.
 - Missing `email` when a Dwolla Customer must be created returns a clean `400` (was an unhandled `KeyError`).
 
-Still open (later groups): secrets-as-CFN-parameters, Lambda packaging pipeline, Dwolla webhook-subscription script, master funding source verification, KYB/KYC tier + NACHA authorization capture.
+### Build + deploy pipeline (done — group 3)
+
+- `payments/build.sh` builds the deploy zip (deps + handler packages at the root); must run on Linux x86_64 (CI does; Docker one-liner in the script header otherwise).
+- `.github/workflows/deploy-payments.yml` builds, uploads to `s3://$LAMBDA_ARTIFACTS_BUCKET/payments/<env>/<sha>.zip`, and `cloudformation deploy`s `payments-<env>`. Triggers on push to `payments/**` / the template, or `workflow_dispatch` (dev/prod). Required GH secrets/vars are listed in `payments/README.md`.
+
+Still open (later groups): secrets-as-CFN-parameters (move to populate-out-of-band), Dwolla webhook-subscription script, master funding source verification, KYB/KYC tier + NACHA authorization capture.
 
 ---
 
