@@ -225,6 +225,30 @@ Query Report in ERPNext — `Inventory Manager` — shows:
 
 Stock is tracked natively (Bin / Stock Ledger Entry), wired via Item Lots — see `scripts/lots/_wire_lot_to_stock.py`. There's no `cases_on_hand` field on Item anymore (a Custom Field, previously used for this) — Custom Fields get serialized into every Item REST response, which wasn't wanted, and `Bin.actual_qty` was always the real source of truth it mirrored. The report just computes it live instead. Cost (`tabItem.valuation_rate`, a core field) is kept in sync with the stock ledger by a scheduled sync (see below) rather than a document-event hook — Bin never fires its own save hooks when updated by Sales Invoice/Stock Reconciliation/etc, and Stock Ledger Entry hooks proved unreliable around cancellations. Submitting a Sales Invoice with "Update Stock" checked (the default) deducts real stock immediately; cost/selling price catch up within a minute.
 
+### Barcode images on invoices
+
+Each Item stores a rendered barcode as a base64 PNG data-URI in
+`custom_barcode_image`; the "Atlas Invoice Tracking Classic" print format just
+`<img src>`s it (wkhtmltopdf can't run JS or import barcode libs at render time).
+
+- **Generate/refresh:** [`scripts/inventory/regenerate_barcode_images.py`](scripts/inventory/regenerate_barcode_images.py)
+  — the single source of truth. python-barcode PNGs with digits baked in and a
+  full quiet zone: UPC-A (11/12 digits), EAN-13 (13), EAN-8 (8), ITF-14 (14),
+  15/16-digit GS1 → stripped to 14. Anything else (non-numeric, other lengths,
+  GS1-128 concat strings) → the image field is **cleared** so the print format
+  falls back to plain text. Run it after any item/barcode import.
+- The `Auto Barcode Image on Item Save` Server Script is now **normalization
+  only** (pads 11→12 digits, sets `barcode_type` by length) — it no longer
+  generates an image. It used to hand-roll SVG data-URIs, which wkhtmltopdf
+  rendered as thin unscannable bars and which clobbered the good PNGs on every
+  save. Reverted by [`scripts/inventory/slim_barcode_server_script.py`](scripts/inventory/slim_barcode_server_script.py).
+- Superseded: `setup_barcode_images.py`, `_regen_barcode_images_with_text.py`,
+  `set_barcode_type_upc.py` (the last blanket-set `barcode_type="UPC"`, which
+  broke EAN-13/ITF-14 detection).
+- A handful of items carry barcodes with an invalid check digit — ERPNext's own
+  `Item.validate` rejects the save, so their image can't be updated until the
+  barcode value is corrected against the supplier sheet.
+
 ---
 
 ## Expiry / Lot Tracking Fields
