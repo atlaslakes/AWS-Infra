@@ -48,6 +48,7 @@ def handler(event, context):
     erp = ERPNextClient(erp_cfg["url"], erp_cfg["api_key"], erp_cfg["api_secret"])
 
     results = []
+    skipped = []
     errors = []
     for invoice_doctype, party_field, party_doctype, direction in _INVOICE_TYPES:
         due_invoices = erp.list(
@@ -64,12 +65,12 @@ def handler(event, context):
                 _process_invoice(
                     erp, dwolla_client, master_url, today,
                     invoice_doctype, party_field, party_doctype, direction,
-                    row["name"], results,
+                    row["name"], results, skipped,
                 )
             except Exception as exc:  # one bad invoice must not abort the whole scan
                 errors.append({"invoice": row["name"], "error": str(exc)})
 
-    out = {"processed": results}
+    out = {"processed": results, "skipped": skipped}
     if errors:
         out["errors"] = errors
         # Surface to the CloudWatch error alarm without losing the successes.
@@ -79,12 +80,19 @@ def handler(event, context):
 
 def _process_invoice(erp, dwolla_client, master_url, today,
                      invoice_doctype, party_field, party_doctype, direction,
-                     invoice_name, results):
+                     invoice_name, results, skipped):
     inv = erp.get(invoice_doctype, invoice_name)
-    party = erp.get(party_doctype, inv[party_field])
+    party_id = inv[party_field]
+    party = erp.get(party_doctype, party_id)
     funding_source = party.get("custom_dwolla_funding_source_id") if party else None
     if not funding_source or (party and not party.get("custom_bank_linked")):
         return  # no verified linked bank account yet — skip until it's linked
+
+    # NACHA: never debit a customer without a retained authorization on file.
+    if direction == "collect" and not party.get("custom_ach_authorization_date"):
+        skipped.append({"invoice": inv["name"], "reason": "no ACH authorization on file",
+                        "party": party_id})
+        return
 
     source_url, destination_url = _funding_source_urls(direction, funding_source, master_url)
     installments = inv.get("custom_ach_installments") or []

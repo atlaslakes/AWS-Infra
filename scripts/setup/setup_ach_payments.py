@@ -102,6 +102,33 @@ for dt in ("Customer", "Supplier"):
     })
 
 
+# ── 1b. ACH authorization (NACHA) — Customer only ─────────────────────────────
+# NACHA requires a retained authorization before debiting a consumer/business
+# bank account. Base44 must write these when the customer accepts autopay.
+# autopay-scan refuses to initiate a "collect" transfer for a customer without
+# custom_ach_authorization_date set.
+print("\n=== [1b] Custom Fields: Customer ACH authorization ===")
+
+_AUTH_FIELDS = [
+    ("custom_ach_authorization_date", "ACH Authorization Date", "Datetime",
+     "When the customer authorized recurring ACH debits (NACHA record)."),
+    ("custom_ach_authorization_ip", "ACH Authorization IP", "Data",
+     "IP address the authorization was captured from."),
+    ("custom_ach_authorization_text", "ACH Authorization Text", "Small Text",
+     "Exact consent language shown to and accepted by the customer."),
+    ("custom_ach_authorization_reference", "ACH Authorization Reference", "Data",
+     "Base44 consent-record id for this authorization."),
+]
+_prev = "custom_plaid_item_id"
+for fname, label, ftype, desc in _AUTH_FIELDS:
+    upsert("Custom Field", f"Customer-{fname}", {
+        "doctype": "Custom Field", "dt": "Customer",
+        "label": label, "fieldname": fname, "fieldtype": ftype,
+        "read_only": 1, "insert_after": _prev, "description": desc,
+    })
+    _prev = fname
+
+
 # ── 2. Custom fields on Sales Invoice / Purchase Invoice ──────────────────────
 print("\n=== [2] Custom Fields: Sales Invoice / Purchase Invoice ===")
 
