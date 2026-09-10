@@ -1,3 +1,4 @@
+import base64
 import hashlib
 import hmac
 import json
@@ -57,6 +58,8 @@ def _find_party_by_plaid_item(erp, item_id):
 
 def handler(event, context):
     body_raw = event.get("body") or "{}"
+    if event.get("isBase64Encoded"):
+        body_raw = base64.b64decode(body_raw).decode("utf-8")
     headers = {k.lower(): v for k, v in (event.get("headers") or {}).items()}
 
     plaid_cfg = plaid_config()
