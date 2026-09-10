@@ -130,12 +130,12 @@ COMMON = {
     "login_id": LOGIN_ID,
     "always_use_account_email_id_as_sender": 1,   # force From = this address
     "always_use_account_name_as_sender_name": 0,  # keep the sender name the Notification sets
-    # Emit NO Reply-To header. Frappe computes the Reply-To fallback from the
-    # pre-rewrite sender (validate_reply_to runs before replace_sender in
-    # email_body.py), which is why it kept showing adminuser@atlaslakes.com even
-    # after From was corrected. With this off, clients reply to From: instead.
+    # add_reply_to_header / reply_to_addresses only exist on newer Frappe v15.x.
+    # The live site (15.112.0) ignores these keys; there Reply-To simply follows
+    # the (now forced) sender, which is the desired result anyway. Harmless to
+    # send — they take effect after a Frappe upgrade.
     "add_reply_to_header": 0,
-    "reply_to_addresses": [],                     # clear any stale rows
+    "reply_to_addresses": [],
     "notify_if_unreplied": 0,
     "smtp_server": "smtp.gmail.com",
     "smtp_port": 587,

@@ -64,38 +64,43 @@ Karavan Imports runs on **ERPNext v15 (Frappe)** hosted on AWS, with **Base44** 
 
 ## Email Routing
 
-Three purpose-specific ERPNext **Email Account**s, all authenticating through the
-one Google OAuth connection (Connected App `Google Mail`, `connected_user =
-Administrator`; underlying Google identity `adminuser@atlaslakes.com`). Each sends
-*as* its own address (`always_use_account_email_id_as_sender = 1`) and emits no
-Reply-To header (`add_reply_to_header = 0`), so neither `From` nor `Reply-To` can
-fall back to `adminuser@atlaslakes.com` — clients reply to the `From` address.
-(Frappe computes the Reply-To fallback from the pre-rewrite sender, so leaving the
-header on reintroduces `adminuser@`.)
+Purpose-specific ERPNext **Email Account**s, all authenticating through one Google
+OAuth token (`connected_user = karavanimports@atlaslakes.com`). Each has
+`always_use_account_email_id_as_sender = 1` so `From` is forced to the account's
+own address instead of falling back to `adminuser@atlaslakes.com`; on this
+instance (Frappe **15.112.0**) `Reply-To` then follows that forced sender —
+`add_reply_to_header` / `reply_to_addresses` don't exist until a later v15.x.
+
+**Live on `erpnext.karavanimports.com`:**
 
 | Account | Address | Direction | Used for |
 | ------- | ------- | --------- | -------- |
-| Support  | `support@karavanimports.com`  | incoming + outgoing | customer support → auto-creates **Issue** from Gmail label `ERPNext Support` |
-| Invoices | `invoices@karavanimports.com` | outgoing only | invoice PDF to customer on Sales Invoice submit |
-| Accounts | `accounts@karavanimports.com` | outgoing (**default outgoing**) | new-customer onboarding, credentials, and all generic system mail |
+| `Invoices - Karavan` | `invoice@karavanimports.com` | outgoing | invoice PDF to customer on Sales Invoice submit |
+| `Accounts - Karavan` | `accounts@karavanimports.com` | outgoing | new-customer onboarding / credentials |
+| `Support - Karavan` | `support@karavanimports.com` | outgoing (incoming **off**) | support replies |
+| `Karavan Imports` | `adminuser@atlaslakes.com` | **default outgoing** + incoming | everything not explicitly routed |
 
-The old catch-all `Karavan Imports` account is **disabled**.
+**Notification** `Auto Send Sales Invoice to Customer` — Sales Invoice → Submit,
+condition `doc.contact_email`, recipient `contact_email`, attaches print format
+`Atlas Invoice Tracking Classic`, sender `Invoices - Karavan`. (Fixed by
+[`scripts/setup/fix_live_email_routing.py`](scripts/setup/fix_live_email_routing.py) —
+it had no recipients, print format, or sender.)
 
-`karavanimports.com` is a secondary domain of the `atlaslakes.com` Google
-Workspace; the three addresses are Groups that `adminuser@atlaslakes.com` belongs
-to. Sending as them requires, in Google admin: "Members can send email as the
-group" per group, verified send-as aliases on `adminuser@`, and a Gmail filter
-`to:(support@karavanimports.com)` → label `ERPNext Support`.
+**Still manual (Google Workspace / human):**
+- `default_outgoing` stays on `Karavan Imports` (adminuser@) — it's the only
+  account proven to deliver. Move it to `Accounts - Karavan` only after
+  confirming `accounts@karavanimports.com` is a verified "Send mail as" alias on
+  `karavanimports@atlaslakes.com`.
+- `Support - Karavan` incoming needs a Gmail filter `to:(support@karavanimports.com)`
+  → label `ERPNext Support` before it can be turned on without ingesting the
+  whole inbox as Issues.
+- Stale `Accounting - Karavan` account (Basic auth, no stored password) — delete
+  in the UI if unused.
 
-**Notifications:**
-
-| Notification | Trigger | Sender | Recipients |
-| ------------ | ------- | ------ | ---------- |
-| Invoice to Customer | Sales Invoice → Submit (if `contact_email` set) | Invoices | `contact_email`, attaches print format `Atlas Invoice Tracking Classic` |
-| New Customer Application | Customer → New, status `Pending` | Accounts | role `Sales Manager`, cc `accounts@karavanimports.com` |
-
-Setup script: [`scripts/setup/setup_email_routing.py`](scripts/setup/setup_email_routing.py)
-(idempotent; header documents the Google Workspace prerequisites).
+[`scripts/setup/setup_email_routing.py`](scripts/setup/setup_email_routing.py)
+describes an idealized clean-slate build (differently-named accounts, the old
+catch-all disabled); the live site predates it, so
+`fix_live_email_routing.py` is the reconcile-with-reality script.
 
 ---
 
