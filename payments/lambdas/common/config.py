@@ -28,6 +28,13 @@ def erpnext_config():
     }
 
 
+def caller_shared_secret():
+    """Shared secret the caller (Base44) must present on the client-facing
+    endpoints. Absent/empty in the secret => caller auth is disabled (only
+    acceptable in a throwaway sandbox)."""
+    return load_secrets().get("base44_shared_secret") or ""
+
+
 def dwolla_config():
     secrets = load_secrets()
     return {

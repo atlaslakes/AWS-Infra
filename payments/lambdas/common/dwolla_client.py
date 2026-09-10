@@ -36,11 +36,25 @@ def create_customer(client, *, first_name, last_name, email, customer_type="unve
 
 
 def attach_funding_source_from_plaid(client, customer_url, *, processor_token, name):
-    resp = client.post(f"{customer_url}/funding-sources", {
-        "plaidToken": processor_token,
-        "name": name,
-    })
-    return resp.headers["Location"]  # Dwolla Funding Source resource URL
+    try:
+        resp = client.post(f"{customer_url}/funding-sources", {
+            "plaidToken": processor_token,
+            "name": name,
+        })
+        return resp.headers["Location"]  # Dwolla Funding Source resource URL
+    except Exception as exc:
+        body = getattr(exc, "body", None)
+        if isinstance(body, dict) and body.get("code") == "DuplicateResource":
+            # This bank account is already attached to the customer — reuse it
+            # instead of 500ing or orphaning a second funding source.
+            existing = (body.get("_links") or {}).get("about", {}).get("href")
+            if existing:
+                return existing
+        raise
+
+
+def get_funding_source(client, funding_source_url):
+    return client.get(funding_source_url).body
 
 
 def create_transfer(client, *, source_url, destination_url, amount, currency="USD",

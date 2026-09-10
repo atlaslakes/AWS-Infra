@@ -4,6 +4,7 @@ import os
 
 sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 
+from common.auth import check_caller
 from common.config import plaid_config
 from common.plaid_client import get_plaid_client, create_link_token
 
@@ -14,6 +15,10 @@ def handler(event, context):
     Called by Base44 right before launching Plaid Link for a user who wants
     to link a bank account for ACH auto-pay.
     """
+    deny = check_caller(event)
+    if deny:
+        return deny
+
     body = json.loads(event.get("body") or "{}")
     party_id = body.get("party_id")
     if not party_id:

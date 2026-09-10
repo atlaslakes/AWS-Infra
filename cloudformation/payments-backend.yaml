@@ -78,6 +78,15 @@ Parameters:
     Type: String
     NoEcho: true
 
+  Base44SharedSecret:
+    Type: String
+    NoEcho: true
+    Description: >
+      Shared secret Base44 must send as the X-Api-Key header on POST /link-token
+      and POST /exchange-and-attach. Those endpoints are otherwise open to the
+      internet. Generate a long random value; the Lambdas fail closed if it is
+      unset (unless ALLOW_UNAUTHENTICATED_CALLERS=true, sandbox only).
+
   NotificationEmail:
     Type: String
     Default: ''
@@ -116,6 +125,10 @@ Metadata:
           - ERPNextPaymentsApiKey
           - ERPNextPaymentsApiSecret
       - Label:
+          default: Caller auth
+        Parameters:
+          - Base44SharedSecret
+      - Label:
           default: Monitoring
         Parameters:
           - NotificationEmail
@@ -140,7 +153,8 @@ Resources:
           "plaid_secret": "${PlaidSecret}",
           "plaid_env": "${PlaidEnvironment}",
           "erpnext_api_key": "${ERPNextPaymentsApiKey}",
-          "erpnext_api_secret": "${ERPNextPaymentsApiSecret}"
+          "erpnext_api_secret": "${ERPNextPaymentsApiSecret}",
+          "base44_shared_secret": "${Base44SharedSecret}"
         }
 
   PaymentsLambdaRole:

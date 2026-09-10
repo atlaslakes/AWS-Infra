@@ -4,9 +4,12 @@ import os
 
 sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 
+from common.auth import check_caller
 from common.config import plaid_config, dwolla_config, erpnext_config
 from common.plaid_client import get_plaid_client, exchange_public_token, create_dwolla_processor_token
-from common.dwolla_client import get_dwolla_client, create_customer, attach_funding_source_from_plaid
+from common.dwolla_client import (
+    get_dwolla_client, create_customer, attach_funding_source_from_plaid, get_funding_source,
+)
 from common.erpnext_client import ERPNextClient
 
 _PARTY_DOCTYPES = {"Customer": "Customer", "Supplier": "Supplier"}
@@ -27,6 +30,10 @@ def handler(event, context):
     bank account as a Dwolla funding source, and stores the resulting IDs
     back onto the ERPNext Customer/Supplier record.
     """
+    deny = check_caller(event)
+    if deny:
+        return deny
+
     body = json.loads(event.get("body") or "{}")
     party_doctype = body.get("party_doctype")
     party_id = body.get("party_id")
@@ -54,26 +61,39 @@ def handler(event, context):
 
     customer_url = party.get("custom_dwolla_customer_id")
     if not customer_url:
+        email = (body.get("email") or party.get("email_id") or "").strip()
+        if not email:
+            return {"statusCode": 400,
+                    "body": json.dumps({"error": "email is required to create the Dwolla Customer"})}
         customer_url = create_customer(
             dwolla_client,
             first_name=body.get("first_name", party_doctype),
             last_name=body.get("last_name", party_id),
-            email=body["email"],
+            email=email,
         )
 
     funding_source_url = attach_funding_source_from_plaid(
         dwolla_client, customer_url, processor_token=processor_token, name=f"{party_doctype} {party_id} bank account"
     )
 
+    # A Plaid-processor funding source is normally verified instantly, but don't
+    # assume it — only flag the party bank-linked (which is what autopay-scan
+    # keys off) once Dwolla actually reports it verified.
+    fs = get_funding_source(dwolla_client, funding_source_url)
+    verified = fs.get("status") == "verified"
+
     erp.update(party_doctype, party_id, {
         "custom_dwolla_customer_id": customer_url,
         "custom_dwolla_funding_source_id": funding_source_url,
-        "custom_bank_linked": 1,
+        "custom_bank_linked": 1 if verified else 0,
         "custom_plaid_item_id": item_id,
     })
 
     return {
         "statusCode": 200,
         "headers": {"Content-Type": "application/json"},
-        "body": json.dumps({"status": "linked"}),
+        "body": json.dumps({
+            "status": "linked" if verified else "pending_verification",
+            "funding_source_status": fs.get("status"),
+        }),
     }

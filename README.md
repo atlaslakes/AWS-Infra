@@ -287,7 +287,14 @@ Group 1 fixes applied to the Lambda handlers:
 - **TLS.** `ERPNextClient` no longer disables certificate verification.
 - Both webhook handlers decode `isBase64Encoded` bodies before signature verification.
 
-Still open (later groups): API Gateway auth on `/link-token` + `/exchange-and-attach`, secrets-as-CFN-parameters, Lambda packaging pipeline, Dwolla webhook-subscription script, KYB/KYC + NACHA authorization capture.
+### Endpoint auth + bank-linking hardening (done — group 2)
+
+- **`/link-token` and `/exchange-and-attach` now require a shared secret.** Base44 sends it as `X-Api-Key` (or `Authorization: Bearer …`); it lives in `PaymentsSecret.base44_shared_secret` (CFN param `Base44SharedSecret`). The handlers **fail closed** if the secret is unset, unless `ALLOW_UNAUTHENTICATED_CALLERS=true` is set on the function (sandbox only). See `common/auth.py`.
+- **`exchange-and-attach` only marks a party `custom_bank_linked=1` once Dwolla reports the funding source `verified`** — otherwise it stores the IDs and returns `pending_verification`, so autopay-scan won't try to draw on an unverified account.
+- Re-linking an already-attached bank (`DuplicateResource`) now **reuses the existing funding source** instead of 500ing / orphaning a second one.
+- Missing `email` when a Dwolla Customer must be created returns a clean `400` (was an unhandled `KeyError`).
+
+Still open (later groups): secrets-as-CFN-parameters, Lambda packaging pipeline, Dwolla webhook-subscription script, master funding source verification, KYB/KYC tier + NACHA authorization capture.
 
 ---
 
