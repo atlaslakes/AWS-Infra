@@ -46,7 +46,7 @@ WORKERS = 8
 
 WRITE_OPTS = {
     "write_text": True,
-    "module_height": 14.0,
+    "module_height": 9.0,
     "module_width": 0.30,
     "font_size": 9,
     "text_distance": 3.0,
