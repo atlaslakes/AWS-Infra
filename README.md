@@ -68,8 +68,21 @@ Purpose-specific ERPNext **Email Account**s, all authenticating through one Goog
 OAuth token (`connected_user = karavanimports@atlaslakes.com`). Each has
 `always_use_account_email_id_as_sender = 1` so `From` is forced to the account's
 own address instead of falling back to `adminuser@atlaslakes.com`; on this
-instance (Frappe **15.112.0**) `Reply-To` then follows that forced sender —
+instance (Frappe **15.112.0**) `Reply-To` normally follows that forced sender —
 `add_reply_to_header` / `reply_to_addresses` don't exist until a later v15.x.
+
+That's not airtight, though: whatever caller composes mail can still pass an
+explicit `reply_to` kwarg straight into `frappe.sendmail()`, bypassing the
+Email Account entirely — confirmed live via a `[Contact Form] ...` message to
+`support@karavanimports.com` that had `Reply-To: adminuser@atlaslakes.com`
+baked into the queued MIME message. The caller isn't in this repo and isn't a
+Server Script / Web Form / custom bench app on the box, so it can't be patched
+at the source. [`scripts/setup/sanitize_reply_to.py`](scripts/setup/sanitize_reply_to.py)
+closes the gap generically with a `Before Insert` Server Script on **Email
+Queue**: whenever the resolved `From` is a real karavanimports.com address but
+`Reply-To` still points at `*@atlaslakes.com`, it rewrites `Reply-To` to match
+`From`. Legitimate internal mail actually sent from an atlaslakes.com address
+(e.g. the old default `Karavan Imports` account) is left alone.
 
 **Live on `erpnext.karavanimports.com`:**
 
