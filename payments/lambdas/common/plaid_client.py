@@ -10,7 +10,6 @@ from plaid.model.webhook_verification_key_get_request import WebhookVerification
 
 _ENV_HOSTS = {
     "sandbox": plaid.Environment.Sandbox,
-    "development": plaid.Environment.Development,
     "production": plaid.Environment.Production,
 }
 

@@ -62,10 +62,82 @@ Resources:
                   - cloudformation:DescribeStackResources
                   - cloudformation:GetTemplate
                   - cloudformation:ListStackResources
+                  - cloudformation:CreateChangeSet
+                  - cloudformation:DescribeChangeSet
+                  - cloudformation:ExecuteChangeSet
+                  - cloudformation:DeleteChangeSet
                 Resource:
                   - !Sub arn:aws:cloudformation:*:${AWS::AccountId}:stack/erpnext-dev/*
                   - !Sub arn:aws:cloudformation:*:${AWS::AccountId}:stack/erpnext-prod/*
                   - !Sub arn:aws:cloudformation:*:${AWS::AccountId}:stack/github-oidc-erpnext/*
+                  - !Sub arn:aws:cloudformation:*:${AWS::AccountId}:stack/payments-dev/*
+                  - !Sub arn:aws:cloudformation:*:${AWS::AccountId}:stack/payments-prod/*
+
+              - Sid: Lambda
+                Effect: Allow
+                Action:
+                  - lambda:CreateFunction
+                  - lambda:UpdateFunctionCode
+                  - lambda:UpdateFunctionConfiguration
+                  - lambda:DeleteFunction
+                  - lambda:GetFunction
+                  - lambda:GetFunctionConfiguration
+                  - lambda:AddPermission
+                  - lambda:RemovePermission
+                  - lambda:GetPolicy
+                  - lambda:ListVersionsByFunction
+                  - lambda:TagResource
+                  - lambda:UntagResource
+                  - lambda:ListTags
+                Resource:
+                  - !Sub arn:aws:lambda:*:${AWS::AccountId}:function:payments-*
+
+              - Sid: ApiGatewayV2
+                Effect: Allow
+                Action:
+                  - apigateway:*
+                Resource:
+                  - !Sub arn:aws:apigateway:${AWS::Region}::/apis
+                  - !Sub arn:aws:apigateway:${AWS::Region}::/apis/*
+
+              - Sid: EventBridge
+                Effect: Allow
+                Action:
+                  - events:PutRule
+                  - events:DeleteRule
+                  - events:DescribeRule
+                  - events:PutTargets
+                  - events:RemoveTargets
+                  - events:EnableRule
+                  - events:DisableRule
+                  - events:ListTargetsByRule
+                  - events:TagResource
+                Resource:
+                  - !Sub arn:aws:events:*:${AWS::AccountId}:rule/payments-*
+
+              - Sid: SNSAlarmTopic
+                Effect: Allow
+                Action:
+                  - sns:CreateTopic
+                  - sns:DeleteTopic
+                  - sns:Subscribe
+                  - sns:Unsubscribe
+                  - sns:GetTopicAttributes
+                  - sns:SetTopicAttributes
+                  - sns:ListSubscriptionsByTopic
+                  - sns:TagResource
+                Resource:
+                  - !Sub arn:aws:sns:*:${AWS::AccountId}:payments-*
+
+              - Sid: CloudWatchAlarms
+                Effect: Allow
+                Action:
+                  - cloudwatch:PutMetricAlarm
+                  - cloudwatch:DeleteAlarms
+                  - cloudwatch:DescribeAlarms
+                  - cloudwatch:TagResource
+                Resource:
+                  - !Sub arn:aws:cloudwatch:*:${AWS::AccountId}:alarm:payments-*
 
               - Sid: EC2
                 Effect: Allow
