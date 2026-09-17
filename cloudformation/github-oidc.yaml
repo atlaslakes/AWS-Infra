@@ -66,6 +66,7 @@ Resources:
                   - cloudformation:DescribeChangeSet
                   - cloudformation:ExecuteChangeSet
                   - cloudformation:DeleteChangeSet
+                  - cloudformation:GetTemplateSummary
                 Resource:
                   - !Sub arn:aws:cloudformation:*:${AWS::AccountId}:stack/erpnext-dev/*
                   - !Sub arn:aws:cloudformation:*:${AWS::AccountId}:stack/erpnext-prod/*
