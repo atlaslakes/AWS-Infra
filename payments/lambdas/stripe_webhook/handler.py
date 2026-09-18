@@ -155,7 +155,10 @@ def handler(event, context):
         return {"statusCode": 401, "body": json.dumps({"error": "invalid signature"})}
 
     event_type = webhook_event["type"]
-    data_object = webhook_event["data"]["object"]
+    # stripe-python's StripeObject doesn't support dict methods like .get() —
+    # convert to a plain (recursively-converted) dict so the handlers below
+    # can use ordinary dict access throughout.
+    data_object = webhook_event["data"]["object"].to_dict()
 
     erp_cfg = erpnext_config()
     erp = ERPNextClient(erp_cfg["url"], erp_cfg["api_key"], erp_cfg["api_secret"])
