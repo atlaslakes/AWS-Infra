@@ -57,12 +57,29 @@ def _create_payment_entry(erp, invoice_doctype, invoice_name, amount, payment_in
     if erp.exists("Payment Entry", [["reference_no", "=", payment_intent_id]]):
         return None
 
+    # Deliberately NOT passing party_amount here: ERPNext's get_payment_entry
+    # receives it as a raw querystring value and, in the version this site
+    # runs, calls abs() on it without casting to a number first — crashes with
+    # "TypeError: bad operand type for abs(): 'str'" every time. Omitting it
+    # makes ERPNext default to the invoice's full outstanding amount instead;
+    # for a partial (installment) payment we then override the amount fields
+    # ourselves below.
     pe = erp.call(
         "erpnext.accounts.doctype.payment_entry.payment_entry.get_payment_entry",
-        dt=invoice_doctype, dn=invoice_name, party_amount=amount,
+        dt=invoice_doctype, dn=invoice_name,
     )
     if not pe:
         raise RuntimeError(f"get_payment_entry returned nothing for {invoice_doctype} {invoice_name}")
+
+    if abs(amount - float(pe.get("paid_amount") or 0)) > 0.01:
+        pe["paid_amount"] = amount
+        pe["received_amount"] = amount
+        pe["base_paid_amount"] = amount
+        pe["base_received_amount"] = amount
+        pe["unallocated_amount"] = 0.0
+        for ref in pe.get("references") or []:
+            if ref.get("reference_doctype") == invoice_doctype and ref.get("reference_name") == invoice_name:
+                ref["allocated_amount"] = amount
 
     pe["mode_of_payment"] = mode_of_payment
     pe["reference_no"] = payment_intent_id
