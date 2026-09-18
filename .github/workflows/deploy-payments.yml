@@ -88,14 +88,9 @@ jobs:
       - name: Populate PaymentsSecret (out of band — never a CFN parameter)
         if: ${{ github.event_name != 'workflow_dispatch' || inputs.action != 'validate-only' }}
         env:
-          DWOLLA_KEY: ${{ secrets.DWOLLA_KEY }}
-          DWOLLA_SECRET: ${{ secrets.DWOLLA_SECRET }}
-          DWOLLA_ENVIRONMENT: ${{ vars.DWOLLA_ENVIRONMENT }}
-          DWOLLA_WEBHOOK_SECRET: ${{ secrets.DWOLLA_WEBHOOK_SECRET }}
-          DWOLLA_MASTER_FUNDING_SOURCE_URL: ${{ secrets.DWOLLA_MASTER_FUNDING_SOURCE_URL }}
-          PLAID_CLIENT_ID: ${{ secrets.PLAID_CLIENT_ID }}
-          PLAID_SECRET: ${{ secrets.PLAID_SECRET }}
-          PLAID_ENVIRONMENT: ${{ vars.PLAID_ENVIRONMENT }}
+          STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
+          STRIPE_PUBLISHABLE_KEY: ${{ secrets.STRIPE_PUBLISHABLE_KEY }}
+          STRIPE_WEBHOOK_SECRET: ${{ secrets.STRIPE_WEBHOOK_SECRET }}
           ERPNEXT_PAYMENTS_API_KEY: ${{ secrets.ERPNEXT_PAYMENTS_API_KEY }}
           ERPNEXT_PAYMENTS_API_SECRET: ${{ secrets.ERPNEXT_PAYMENTS_API_SECRET }}
           BASE44_SHARED_SECRET: ${{ secrets.BASE44_SHARED_SECRET }}
@@ -105,19 +100,13 @@ jobs:
             --query "Stacks[0].Outputs[?OutputKey=='PaymentsSecretArn'].OutputValue" \
             --output text)
           SECRET_JSON=$(jq -n \
-            --arg dwolla_key "$DWOLLA_KEY" \
-            --arg dwolla_secret "$DWOLLA_SECRET" \
-            --arg dwolla_environment "$DWOLLA_ENVIRONMENT" \
-            --arg dwolla_webhook_secret "$DWOLLA_WEBHOOK_SECRET" \
-            --arg dwolla_master_funding_source_url "$DWOLLA_MASTER_FUNDING_SOURCE_URL" \
-            --arg plaid_client_id "$PLAID_CLIENT_ID" \
-            --arg plaid_secret "$PLAID_SECRET" \
-            --arg plaid_env "$PLAID_ENVIRONMENT" \
+            --arg stripe_secret_key "$STRIPE_SECRET_KEY" \
+            --arg stripe_publishable_key "$STRIPE_PUBLISHABLE_KEY" \
+            --arg stripe_webhook_secret "$STRIPE_WEBHOOK_SECRET" \
             --arg erpnext_api_key "$ERPNEXT_PAYMENTS_API_KEY" \
             --arg erpnext_api_secret "$ERPNEXT_PAYMENTS_API_SECRET" \
             --arg base44_shared_secret "$BASE44_SHARED_SECRET" \
-            '{$dwolla_key,$dwolla_secret,$dwolla_environment,$dwolla_webhook_secret,
-              $dwolla_master_funding_source_url,$plaid_client_id,$plaid_secret,$plaid_env,
+            '{$stripe_secret_key,$stripe_publishable_key,$stripe_webhook_secret,
               $erpnext_api_key,$erpnext_api_secret,$base44_shared_secret}')
           aws secretsmanager put-secret-value \
             --secret-id "$SECRET_ARN" \

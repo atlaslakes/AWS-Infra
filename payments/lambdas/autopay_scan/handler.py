@@ -4,15 +4,19 @@ import datetime
 
 sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 
-from common.config import dwolla_config, erpnext_config
-from common.dwolla_client import get_dwolla_client, create_transfer, idempotency_key
+from common.config import stripe_config, erpnext_config
+from common.stripe_client import get_stripe_client, create_payment_intent
 from common.erpnext_client import ERPNextClient
 
-# (invoice doctype, party fieldname on invoice, party doctype, transfer direction)
+import stripe as stripe_module
+
+# (invoice doctype, party fieldname on invoice, party doctype, direction)
 _INVOICE_TYPES = [
-    # Customer owes us: debit the customer's funding source, credit our master account.
+    # Customer owes us: charge the customer's saved payment method.
     ("Sales Invoice", "customer", "Customer", "collect"),
-    # We owe the vendor: debit our master account, credit the vendor's funding source.
+    # We owe the vendor: charge is on our side, not modeled via off-session
+    # PaymentIntents here — payouts to vendors are handled outside Stripe's
+    # customer-charge model, so "payout" invoices are skipped by this scan.
     ("Purchase Invoice", "supplier", "Supplier", "payout"),
 ]
 
@@ -21,28 +25,22 @@ _INVOICE_TYPES = [
 _DUE_STATUSES = (None, "", "Pending")
 
 
-def _funding_source_urls(direction, party_funding_source, master_url):
-    if direction == "collect":
-        return party_funding_source, master_url
-    return master_url, party_funding_source
-
-
 def handler(event, context):
     """Scheduled (EventBridge) — scans for due, auto-pay-enabled invoices and
-    initiates the corresponding Dwolla ACH transfer(s). Does NOT create a
-    Payment Entry yet; that happens once the dwolla_webhook handler sees
-    transfer_completed, since ACH can still fail/return after initiation.
+    initiates the corresponding off-session Stripe PaymentIntent(s). Does NOT
+    create a Payment Entry yet; that happens once stripe-webhook sees
+    payment_intent.succeeded, since a charge can still fail/return after
+    confirmation (especially ACH, which settles asynchronously).
 
-    If an invoice has rows in custom_ach_installments, each row is a
-    separate scheduled partial payment (installment plan). If it has no
-    rows, the invoice is auto-paid in full on its due_date (the original,
-    simpler behavior).
+    If an invoice has rows in custom_ach_installments, each row is a separate
+    scheduled partial payment (installment plan). If it has no rows, the
+    invoice is auto-paid in full on its due_date (the original, simpler
+    behavior).
     """
     today = datetime.date.today().isoformat()
 
-    dwolla_cfg = dwolla_config()
-    dwolla_client = get_dwolla_client(dwolla_cfg["key"], dwolla_cfg["secret"], dwolla_cfg["environment"])
-    master_url = dwolla_cfg["master_funding_source_url"]
+    stripe_cfg = stripe_config()
+    client = get_stripe_client(stripe_cfg["secret_key"])
 
     erp_cfg = erpnext_config()
     erp = ERPNextClient(erp_cfg["url"], erp_cfg["api_key"], erp_cfg["api_secret"])
@@ -51,6 +49,9 @@ def handler(event, context):
     skipped = []
     errors = []
     for invoice_doctype, party_field, party_doctype, direction in _INVOICE_TYPES:
+        if direction != "collect":
+            continue  # payouts are not modeled via Stripe customer charges
+
         due_invoices = erp.list(
             invoice_doctype,
             filters=[
@@ -63,8 +64,8 @@ def handler(event, context):
         for row in due_invoices:
             try:
                 _process_invoice(
-                    erp, dwolla_client, master_url, today,
-                    invoice_doctype, party_field, party_doctype, direction,
+                    erp, client, today,
+                    invoice_doctype, party_field, party_doctype,
                     row["name"], results, skipped,
                 )
             except Exception as exc:  # one bad invoice must not abort the whole scan
@@ -78,28 +79,35 @@ def handler(event, context):
     return out
 
 
-def _process_invoice(erp, dwolla_client, master_url, today,
-                     invoice_doctype, party_field, party_doctype, direction,
+def _process_invoice(erp, client, today,
+                     invoice_doctype, party_field, party_doctype,
                      invoice_name, results, skipped):
     inv = erp.get(invoice_doctype, invoice_name)
     party_id = inv[party_field]
     party = erp.get(party_doctype, party_id)
-    funding_source = party.get("custom_dwolla_funding_source_id") if party else None
-    if not funding_source or (party and not party.get("custom_bank_linked")):
-        return  # no verified linked bank account yet — skip until it's linked
+    customer_id = party.get("custom_stripe_customer_id") if party else None
+    payment_method_id = party.get("custom_stripe_payment_method_id") if party else None
+    if not customer_id or not payment_method_id:
+        return  # no saved payment method yet — skip until it's linked
 
-    # NACHA: never debit a customer without a retained authorization on file.
-    if direction == "collect" and not party.get("custom_ach_authorization_date"):
+    method_type = party.get("custom_payment_method_type")
+    if method_type == "Bank" and not party.get("custom_bank_linked"):
+        return  # bank method not verified/active — skip
+
+    # NACHA: never debit a customer's bank account without a retained
+    # authorization on file. Cards don't require this.
+    if method_type == "Bank" and not party.get("custom_ach_authorization_date"):
         skipped.append({"invoice": inv["name"], "reason": "no ACH authorization on file",
                         "party": party_id})
         return
 
-    source_url, destination_url = _funding_source_urls(direction, funding_source, master_url)
+    payment_method_types = ["us_bank_account"] if method_type == "Bank" else ["card"]
+    currency = (inv.get("currency") or "usd").lower()
     installments = inv.get("custom_ach_installments") or []
 
     if installments:
         for installment in installments:
-            if installment.get("ach_transfer_id"):
+            if installment.get("stripe_payment_intent_id"):
                 continue  # already initiated — never re-send
             if installment.get("status") not in _DUE_STATUSES:
                 continue
@@ -108,34 +116,43 @@ def _process_invoice(erp, dwolla_client, master_url, today,
             if float(installment.get("amount") or 0) <= 0:
                 continue
 
-            transfer_url = create_transfer(
-                dwolla_client,
-                source_url=source_url,
-                destination_url=destination_url,
-                amount=installment["amount"],
-                metadata={
-                    "invoice_doctype": invoice_doctype,
-                    "invoice_name": inv["name"],
-                    "installment_row": installment["name"],
-                },
-                idem_key=idempotency_key(
-                    f"{invoice_doctype}|{inv['name']}|inst|{installment['name']}"
-                ),
-            )
+            try:
+                payment_intent = create_payment_intent(
+                    client,
+                    customer_id=customer_id,
+                    amount_cents=round(float(installment["amount"]) * 100),
+                    currency=currency,
+                    payment_method_types=payment_method_types,
+                    payment_method_id=payment_method_id,
+                    off_session=True,
+                    confirm=True,
+                    metadata={
+                        "invoice_doctype": invoice_doctype,
+                        "invoice_name": inv["name"],
+                        "installment_row": installment["name"],
+                    },
+                    idempotency_key=f"autopay:{invoice_doctype}:{inv['name']}:{installment['name']}",
+                )
+            except (stripe_module.error.CardError, stripe_module.error.InvalidRequestError) as exc:
+                installment["status"] = "Failed"
+                erp.update(invoice_doctype, inv["name"], {"custom_ach_installments": installments})
+                skipped.append({"invoice": inv["name"], "installment": installment["name"], "reason": str(exc)})
+                continue
+
             installment["status"] = "Processing"
-            installment["ach_transfer_id"] = transfer_url
+            installment["stripe_payment_intent_id"] = payment_intent.id
             # Persist immediately after each transfer so a later crash in this
             # loop can't lose an already-initiated payment.
             erp.update(invoice_doctype, inv["name"], {"custom_ach_installments": installments})
             results.append({
-                "invoice": inv["name"], "installment": installment["name"], "transfer": transfer_url,
+                "invoice": inv["name"], "installment": installment["name"], "payment_intent": payment_intent.id,
             })
         return
 
     # Single full-amount auto-pay on due_date.
-    if inv.get("custom_ach_transfer_id"):
+    if inv.get("custom_stripe_payment_intent_id"):
         return  # already initiated — never re-send
-    if inv.get("custom_ach_status") not in _DUE_STATUSES:
+    if inv.get("custom_payment_status") not in _DUE_STATUSES:
         return
     if (inv.get("due_date") or "") > today:
         return
@@ -143,18 +160,26 @@ def _process_invoice(erp, dwolla_client, master_url, today,
     if amount <= 0:
         return
 
-    transfer_url = create_transfer(
-        dwolla_client,
-        source_url=source_url,
-        destination_url=destination_url,
-        amount=amount,
-        metadata={"invoice_doctype": invoice_doctype, "invoice_name": inv["name"]},
-        idem_key=idempotency_key(
-            f"{invoice_doctype}|{inv['name']}|due|{inv.get('due_date')}|{amount:.2f}"
-        ),
-    )
+    try:
+        payment_intent = create_payment_intent(
+            client,
+            customer_id=customer_id,
+            amount_cents=round(amount * 100),
+            currency=currency,
+            payment_method_types=payment_method_types,
+            payment_method_id=payment_method_id,
+            off_session=True,
+            confirm=True,
+            metadata={"invoice_doctype": invoice_doctype, "invoice_name": inv["name"]},
+            idempotency_key=f"autopay:{invoice_doctype}:{inv['name']}:full:{inv.get('due_date')}",
+        )
+    except (stripe_module.error.CardError, stripe_module.error.InvalidRequestError) as exc:
+        erp.update(invoice_doctype, inv["name"], {"custom_payment_status": "Failed"})
+        skipped.append({"invoice": inv["name"], "reason": str(exc)})
+        return
+
     erp.update(invoice_doctype, inv["name"], {
-        "custom_ach_transfer_id": transfer_url,
-        "custom_ach_status": "Processing",
+        "custom_stripe_payment_intent_id": payment_intent.id,
+        "custom_payment_status": "Processing",
     })
-    results.append({"invoice": inv["name"], "transfer": transfer_url})
+    results.append({"invoice": inv["name"], "payment_intent": payment_intent.id})

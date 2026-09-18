@@ -35,23 +35,10 @@ def caller_shared_secret():
     return load_secrets().get("base44_shared_secret") or ""
 
 
-def dwolla_config():
+def stripe_config():
     secrets = load_secrets()
     return {
-        "key": secrets["dwolla_key"],
-        "secret": secrets["dwolla_secret"],
-        "environment": secrets["dwolla_environment"],
-        "webhook_secret": secrets["dwolla_webhook_secret"],
-        # Atlas Lakes' own Dwolla funding source (the business bank account):
-        # source of outbound vendor payments, destination of inbound customer collections.
-        "master_funding_source_url": secrets["dwolla_master_funding_source_url"],
-    }
-
-
-def plaid_config():
-    secrets = load_secrets()
-    return {
-        "client_id": secrets["plaid_client_id"],
-        "secret": secrets["plaid_secret"],
-        "environment": secrets["plaid_env"],
+        "secret_key": secrets["stripe_secret_key"],
+        "publishable_key": secrets["stripe_publishable_key"],
+        "webhook_secret": secrets["stripe_webhook_secret"],
     }

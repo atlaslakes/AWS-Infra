@@ -1,5 +1,3 @@
 requests>=2.31
-dwollav2>=2.1
-plaid-python>=18.0
+stripe>=10.0
 boto3>=1.34
-pyjwt[crypto]>=2.8

@@ -3,15 +3,16 @@
 #
 #   payments/build.sh [OUTPUT_ZIP]
 #
-# Produces a zip whose root contains the handler packages (link_token/,
-# exchange_and_attach/, dwolla_webhook/, plaid_webhook/, autopay_scan/, common/)
+# Produces a zip whose root contains the handler packages (setup_intent/,
+# attach_payment_method/, pay_now/, stripe_webhook/, autopay_scan/, common/)
 # plus all third-party dependencies. Handler paths in payments-backend.yaml are
 # "<pkg>.handler.handler", so those package dirs must sit at the zip root.
 #
-# Dependencies are installed for the running interpreter's platform. Some deps
-# (cryptography via pyjwt[crypto], pydantic-core via plaid-python) are compiled
-# extensions, and plaid-python is sdist-only — so this MUST run on Linux x86_64
-# (the CI runner is ubuntu-latest). On macOS/Windows, run it inside Docker:
+# Dependencies are installed for the running interpreter's platform. stripe-python
+# is pure Python (no compiled extensions), so this may no longer strictly need to
+# run on Linux x86_64 the way the old Dwolla/Plaid version did — not yet
+# re-verified, so still build in CI (ubuntu-latest) or, on macOS/Windows, inside
+# Docker if in doubt:
 #
 #   docker run --rm -v "$PWD":/w -w /w public.ecr.aws/lambda/python:3.12 \
 #     bash -c "pip install -q pip -U && payments/build.sh /w/payments-lambda.zip"
