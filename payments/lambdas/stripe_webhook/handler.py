@@ -90,12 +90,18 @@ def _create_payment_entry(erp, invoice_doctype, invoice_name, amount, payment_in
     return created["name"]
 
 
-def _mode_of_payment(payment_intent):
-    types = payment_intent.get("payment_method_types") or []
-    return "ACH" if "us_bank_account" in types else "Card"
+def _mode_of_payment(client, payment_intent):
+    """payment_intent["payment_method_types"] lists every type the PaymentIntent
+    was WILLING to accept, not which one was actually used — always retrieve the
+    actual PaymentMethod to find that out."""
+    payment_method_id = payment_intent.get("payment_method")
+    if not payment_method_id:
+        return "ACH" if "us_bank_account" in (payment_intent.get("payment_method_types") or []) else "Card"
+    payment_method = client.PaymentMethod.retrieve(payment_method_id)
+    return "ACH" if payment_method.type == "us_bank_account" else "Card"
 
 
-def _handle_payment_succeeded(erp, payment_intent):
+def _handle_payment_succeeded(client, erp, payment_intent):
     metadata = payment_intent.get("metadata") or {}
     invoice_doctype = metadata.get("invoice_doctype")
     invoice_name = metadata.get("invoice_name")
@@ -111,7 +117,7 @@ def _handle_payment_succeeded(erp, payment_intent):
         datetime.datetime.utcfromtimestamp(created_ts).date().isoformat()
         if created_ts else datetime.date.today().isoformat()
     )
-    mode_of_payment = _mode_of_payment(payment_intent)
+    mode_of_payment = _mode_of_payment(client, payment_intent)
 
     pe_name = _create_payment_entry(
         erp, invoice_doctype, invoice_name, amount, payment_intent["id"], ref_date, mode_of_payment,
@@ -181,7 +187,7 @@ def handler(event, context):
     erp = ERPNextClient(erp_cfg["url"], erp_cfg["api_key"], erp_cfg["api_secret"])
 
     if event_type == "payment_intent.succeeded":
-        return _handle_payment_succeeded(erp, data_object)
+        return _handle_payment_succeeded(client, erp, data_object)
     if event_type == "payment_intent.payment_failed":
         return _handle_payment_failed(erp, data_object)
     if event_type == "mandate.updated":

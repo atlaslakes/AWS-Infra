@@ -180,6 +180,7 @@ for dt in ("Sales Invoice", "Purchase Invoice"):
         "fieldname": "custom_stripe_payment_intent_id",
         "fieldtype": "Data",
         "read_only": 1,
+        "allow_on_submit": 1,
         "insert_after": "custom_autopay_enabled",
         "description": "Stripe PaymentIntent resource ID for the initiated payment.",
     })
@@ -191,6 +192,7 @@ for dt in ("Sales Invoice", "Purchase Invoice"):
         "fieldtype": "Select",
         "options": "\nPending\nProcessing\nCompleted\nFailed\nReturned",
         "read_only": 1,
+        "allow_on_submit": 1,
         "in_list_view": 1,
         "insert_after": "custom_stripe_payment_intent_id",
         "description": "Reconciled from Stripe webhook events.",
@@ -225,6 +227,7 @@ for dt in ("Sales Invoice", "Purchase Invoice"):
         "fieldname": "custom_ach_installments",
         "fieldtype": "Table",
         "options": "Autopay Installment",
+        "allow_on_submit": 1,
         "insert_after": "custom_payment_status",
         "description": "Optional payment schedule: split this invoice's total into multiple charges on different dates. Leave empty for a single full-amount auto-pay on due_date.",
     })
