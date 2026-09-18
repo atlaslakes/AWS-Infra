@@ -171,6 +171,7 @@ for dt in ("Sales Invoice", "Purchase Invoice"):
         "fieldtype": "Check",
         "bold": 1,
         "in_list_view": 1,
+        "allow_on_submit": 1,
         "description": "When checked, the autopay-scan Lambda will initiate an off-session Stripe charge once due.",
     })
     upsert("Custom Field", f"{dt}-custom_stripe_payment_intent_id", {
