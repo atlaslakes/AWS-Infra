@@ -6,9 +6,11 @@ on:
     - cron: '0 6 * * *'   # daily at 6am UTC
 
 env:
-  # The live ERPNext CloudFormation stack. The instance and backup bucket are
-  # looked up from it, so a future migration only needs this one line changed.
+  # The live ERPNext CloudFormation stack and its bucket — update both after a
+  # migration. The instance is looked up by the stack tag. (The deploy role
+  # can't DescribeStackResources on this stack, so the bucket is pinned.)
   STACK_NAME: erpnext-prod-clean-20260617a
+  BUCKET: erpnext-prod-clean-20260617a-erpnextbucket-uy3oguk4cgy1
   SITE: frontend
   BACKUP_DIR: /var/lib/docker/volumes/frappe_docker_sites/_data/frontend/private/backups
   LOCAL_RETENTION_DAYS: '7'
@@ -26,28 +28,20 @@ jobs:
           role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
           aws-region: us-east-1
 
-      - name: Resolve instance and bucket from stack
+      - name: Resolve instance from stack tag
         run: |
           INSTANCE_ID=$(aws ec2 describe-instances \
             --filters "Name=tag:aws:cloudformation:stack-name,Values=$STACK_NAME" \
                       "Name=instance-state-name,Values=running" \
             --query "Reservations[0].Instances[0].InstanceId" \
             --output text --no-cli-pager)
-          BUCKET=$(aws cloudformation describe-stack-resources \
-            --stack-name "$STACK_NAME" \
-            --query "StackResources[?ResourceType=='AWS::S3::Bucket'] | [0].PhysicalResourceId" \
-            --output text --no-cli-pager)
 
           if [[ ! "$INSTANCE_ID" =~ ^i- ]]; then
             echo "::error::No running instance found for stack $STACK_NAME"; exit 1
           fi
-          if [[ -z "$BUCKET" || "$BUCKET" == "None" ]]; then
-            echo "::error::No S3 bucket found in stack $STACK_NAME"; exit 1
-          fi
           echo "Instance: $INSTANCE_ID"
           echo "Bucket:   $BUCKET"
           echo "INSTANCE_ID=$INSTANCE_ID" >> $GITHUB_ENV
-          echo "BUCKET=$BUCKET" >> $GITHUB_ENV
 
       - name: Take backup on EC2, sync to S3, prune old local copies
         run: |
