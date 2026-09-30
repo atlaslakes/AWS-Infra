@@ -3,7 +3,15 @@ name: Verify ERPNext Backups
 on:
   workflow_dispatch:
   schedule:
-    - cron: '0 6 * * *'   # daily at 6am UTC — checks previous night's backup
+    - cron: '0 6 * * *'   # daily at 6am UTC
+
+env:
+  # The live ERPNext CloudFormation stack. The instance and backup bucket are
+  # looked up from it, so a future migration only needs this one line changed.
+  STACK_NAME: erpnext-prod-clean-20260617a
+  SITE: frontend
+  BACKUP_DIR: /var/lib/docker/volumes/frappe_docker_sites/_data/frontend/private/backups
+  LOCAL_RETENTION_DAYS: '7'
 
 jobs:
   verify-backups:
@@ -18,79 +26,96 @@ jobs:
           role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
           aws-region: us-east-1
 
-      - name: Check S3 for recent backup files
-        run: |
-          BUCKET="erpnext-poc-erpnextbucket-780m8mqa8l0v"
-          echo "=== S3 bucket contents (backups/) ==="
-          aws s3 ls s3://$BUCKET/backups/ --recursive --no-cli-pager \
-            | sort -k1,2 | tail -20
-
-          echo ""
-          echo "=== Checking for backups in last 24 hours ==="
-          CUTOFF=$(date -d '24 hours ago' +%Y-%m-%d 2>/dev/null || date -v-24H +%Y-%m-%d)
-          RECENT=$(aws s3 ls s3://$BUCKET/backups/ --recursive --no-cli-pager \
-            | awk -v cutoff="$CUTOFF" '$1 >= cutoff' | wc -l)
-          echo "Files modified since $CUTOFF: $RECENT"
-
-          if [ "$RECENT" -eq 0 ]; then
-            echo "::warning::No backup files found in S3 in the last 24 hours"
-          else
-            echo "::notice::$RECENT backup file(s) found in S3 from last 24 hours"
-          fi
-
-      - name: Get EC2 instance ID
+      - name: Resolve instance and bucket from stack
         run: |
           INSTANCE_ID=$(aws ec2 describe-instances \
-            --filters "Name=tag:aws:cloudformation:stack-name,Values=erpnext" \
+            --filters "Name=tag:aws:cloudformation:stack-name,Values=$STACK_NAME" \
                       "Name=instance-state-name,Values=running" \
             --query "Reservations[0].Instances[0].InstanceId" \
             --output text --no-cli-pager)
-          echo "INSTANCE_ID=$INSTANCE_ID" >> $GITHUB_ENV
+          BUCKET=$(aws cloudformation describe-stack-resources \
+            --stack-name "$STACK_NAME" \
+            --query "StackResources[?ResourceType=='AWS::S3::Bucket'] | [0].PhysicalResourceId" \
+            --output text --no-cli-pager)
 
-      - name: Check backup files on EC2 and trigger fresh backup
+          if [[ ! "$INSTANCE_ID" =~ ^i- ]]; then
+            echo "::error::No running instance found for stack $STACK_NAME"; exit 1
+          fi
+          if [[ -z "$BUCKET" || "$BUCKET" == "None" ]]; then
+            echo "::error::No S3 bucket found in stack $STACK_NAME"; exit 1
+          fi
+          echo "Instance: $INSTANCE_ID"
+          echo "Bucket:   $BUCKET"
+          echo "INSTANCE_ID=$INSTANCE_ID" >> $GITHUB_ENV
+          echo "BUCKET=$BUCKET" >> $GITHUB_ENV
+
+      - name: Take backup on EC2, sync to S3, prune old local copies
         run: |
+          # set -e so a failed backup or sync fails the SSM command (and this job)
+          # instead of being reported as Success.
+          PARAMS=$(jq -n \
+            --arg dir "$BACKUP_DIR" --arg site "$SITE" --arg bucket "$BUCKET" \
+            --arg days "$LOCAL_RETENTION_DAYS" '{commands: [
+              "set -euo pipefail",
+              "echo \"=== Taking backup ===\"",
+              "docker exec frappe_docker-backend-1 bench --site \($site) backup --with-files",
+              "echo \"=== Syncing to S3 ===\"",
+              "aws s3 sync \($dir)/ s3://\($bucket)/backups/\($site)/ --region us-east-1 --no-progress",
+              "echo \"=== Pruning local backups older than \($days) days (S3 copies are kept) ===\"",
+              "find \($dir) -maxdepth 1 -type f -mtime +\($days) -print -delete",
+              "echo \"=== Backup files on disk ===\"",
+              "ls -lh \($dir)/",
+              "df -h / | tail -1"
+            ]}')
+
           COMMAND_ID=$(aws ssm send-command \
             --instance-ids "$INSTANCE_ID" \
             --document-name "AWS-RunShellScript" \
-            --parameters 'commands=[
-              "echo \"=== Backup files on disk ===\"",
-              "ls -lh /var/lib/docker/volumes/frappe_docker_sites/_data/frontend/private/backups/ 2>/dev/null || echo No backups directory found",
-              "echo \"\"",
-              "echo \"=== Triggering fresh backup ===\"",
-              "docker exec frappe_docker-backend-1 bench --site frontend backup --with-files 2>&1 || echo Backup command failed",
-              "echo \"\"",
-              "echo \"=== Syncing to S3 ===\"",
-              "aws s3 sync /var/lib/docker/volumes/frappe_docker_sites/_data/frontend/private/backups/ s3://erpnext-poc-erpnextbucket-780m8mqa8l0v/backups/frontend/ --region us-east-1 --no-cli-pager",
-              "echo \"Sync complete\""
-            ]' \
+            --timeout-seconds 900 \
+            --parameters "$PARAMS" \
             --query "Command.CommandId" \
             --output text --no-cli-pager)
-
           echo "SSM Command: $COMMAND_ID"
 
-          for i in $(seq 1 24); do
+          STATUS=Pending
+          for i in $(seq 1 60); do
             sleep 10
             STATUS=$(aws ssm get-command-invocation \
               --command-id "$COMMAND_ID" --instance-id "$INSTANCE_ID" \
               --query "Status" --output text --no-cli-pager 2>/dev/null || echo "Pending")
             echo "Status: $STATUS"
-            if [[ "$STATUS" == "Success" || "$STATUS" == "Failed" ]]; then break; fi
+            case "$STATUS" in Success|Failed|Cancelled|TimedOut) break ;; esac
           done
 
-          OUTPUT=$(aws ssm get-command-invocation \
-            --command-id "$COMMAND_ID" --instance-id "$INSTANCE_ID" \
-            --query "StandardOutputContent" --output text --no-cli-pager)
           echo "--- Output ---"
-          echo "$OUTPUT"
+          aws ssm get-command-invocation \
+            --command-id "$COMMAND_ID" --instance-id "$INSTANCE_ID" \
+            --query "StandardOutputContent" --output text --no-cli-pager
 
           if [ "$STATUS" != "Success" ]; then
-            ERROR=$(aws ssm get-command-invocation \
-              --command-id "$COMMAND_ID" --instance-id "$INSTANCE_ID" \
-              --query "StandardErrorContent" --output text --no-cli-pager)
             echo "--- Error ---"
-            echo "$ERROR"
+            aws ssm get-command-invocation \
+              --command-id "$COMMAND_ID" --instance-id "$INSTANCE_ID" \
+              --query "StandardErrorContent" --output text --no-cli-pager
             echo "::error::Backup or sync failed: $STATUS"
             exit 1
           fi
 
-          echo "::notice::Backup verified and synced to S3 successfully"
+      - name: Verify today's backup reached S3
+        run: |
+          # Backup filenames use the site's timezone, not UTC, so accept
+          # today's or yesterday's UTC date.
+          TODAY=$(date -u +%Y%m%d)
+          YESTERDAY=$(date -u -d yesterday +%Y%m%d)
+          echo "=== Latest files in s3://$BUCKET/backups/$SITE/ ==="
+          LISTING=$(aws s3 ls "s3://$BUCKET/backups/$SITE/" --no-cli-pager)
+          echo "$LISTING" | sort | tail -8
+
+          for kind in database.sql.gz files.tar private-files.tar; do
+            if ! echo "$LISTING" \
+                 | grep -Eq "(${TODAY}|${YESTERDAY})_[0-9]+-${SITE}-${kind}$"; then
+              echo "::error::No recent $kind backup in S3"
+              exit 1
+            fi
+          done
+          echo "::notice::Recent database + files backups are in s3://$BUCKET/backups/$SITE/"
