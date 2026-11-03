@@ -24,7 +24,8 @@ __pycache__/
 *.pyc
 scripts/*.py
 
-# Large local data files
+# Local data files: business exports, DB backups, SSM params (may hold credentials)
+data/
 Data_06_23.csv
 _migrate.tgz
 

@@ -34,11 +34,14 @@ Resources:
               Federated: !Sub arn:aws:iam::${AWS::AccountId}:oidc-provider/token.actions.githubusercontent.com
             Action: sts:AssumeRoleWithWebIdentity
             Condition:
+              # Only the dev/prod GitHub environments and the deploy branch may
+              # assume this role; other branches and pull requests cannot.
               StringEquals:
                 token.actions.githubusercontent.com:aud: sts.amazonaws.com
-              StringLike:
                 token.actions.githubusercontent.com:sub:
-                  !Sub repo:${GitHubOrg}/${GitHubRepo}:*
+                  - !Sub repo:${GitHubOrg}/${GitHubRepo}:environment:dev
+                  - !Sub repo:${GitHubOrg}/${GitHubRepo}:environment:prod
+                  - !Sub repo:${GitHubOrg}/${GitHubRepo}:ref:refs/heads/${GitHubBranch}
       Policies:
         - PolicyName: ERPNextDeployPolicy
           PolicyDocument:

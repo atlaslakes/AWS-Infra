@@ -188,7 +188,9 @@ Resources:
       Name: !Sub ${AWS::StackName}-autopay-scan-schedule
       Description: Triggers autopay-scan hourly to initiate off-session Stripe charges for due, auto-pay-enabled invoices.
       ScheduleExpression: rate(1 hour)
-      State: ENABLED
+      # Dev shares the production ERPNext site, so its scan stays off to keep
+      # test-mode charges and Payment Entries off real invoices.
+      State: !If [IsProd, ENABLED, DISABLED]
       Targets:
         - Id: AutopayScanFunction
           Arn: !GetAtt AutopayScanFunction.Arn

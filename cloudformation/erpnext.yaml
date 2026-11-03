@@ -360,7 +360,7 @@ Resources:
       DBName: erpnext
       PubliclyAccessible: false
       MultiAZ: false
-      BackupRetentionPeriod: 1
+      BackupRetentionPeriod: !If [IsProd, 14, 1]
       DeletionProtection: !If [IsProd, true, false]
       VPCSecurityGroups:
         - !Ref RDSSecurityGroup

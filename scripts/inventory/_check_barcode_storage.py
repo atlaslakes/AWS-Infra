@@ -5,7 +5,7 @@ Find UPCs for items in items_missing_price.csv from:
 Then update the CSV and push UPCs to ERPNext custom_barcode field.
 """
 
-import csv, re, openpyxl, requests
+import csv, os, re, openpyxl, requests
 from difflib import SequenceMatcher
 requests.packages.urllib3.disable_warnings()
 
@@ -134,7 +134,7 @@ print(f"Written to {out_path}")
 # ── 6. Push UPCs to ERPNext ───────────────────────────────────────────────────
 URL = "https://erpnext.karavanimports.com"
 s = requests.Session(); s.verify = False
-s.post(f"{URL}/api/method/login", data={"usr": "Administrator", "pwd": "TempMigrate2026!"}, timeout=15)
+s.post(f"{URL}/api/method/login", data={"usr": "Administrator", "pwd": os.environ.get("ERP_ADMIN_PWD")}, timeout=15)
 
 updated_erp, skipped_erp = 0, 0
 for item in missing:

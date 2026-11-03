@@ -1,7 +1,7 @@
-import requests, json
+import os, requests, json
 requests.packages.urllib3.disable_warnings()
 s = requests.Session(); s.verify = False
-s.post('https://erpnext.karavanimports.com/api/method/login', data={'usr':'Administrator','pwd':'TempMigrate2026!'}, timeout=15)
+s.post('https://erpnext.karavanimports.com/api/method/login', data={'usr':'Administrator','pwd':os.environ.get('ERP_ADMIN_PWD')}, timeout=15)
 
 apps = s.get('https://erpnext.karavanimports.com/api/resource/Connected%20App',
              params={"fields": '["name","provider_name","client_id","redirect_uri","authorization_uri"]', "limit": 10},

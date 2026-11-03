@@ -1,7 +1,7 @@
-import requests
+import os, requests
 requests.packages.urllib3.disable_warnings()
 s = requests.Session(); s.verify = False
-s.post('https://erpnext.karavanimports.com/api/method/login', data={'usr':'Administrator','pwd':'TempMigrate2026!'}, timeout=15)
+s.post('https://erpnext.karavanimports.com/api/method/login', data={'usr':'Administrator','pwd':os.environ.get('ERP_ADMIN_PWD')}, timeout=15)
 
 users = s.get('https://erpnext.karavanimports.com/api/resource/User',
     params={"fields": '["name","full_name"]', "limit": 20,

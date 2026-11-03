@@ -15,7 +15,7 @@ Usage:
   python setup_customer_approval.py
 """
 
-import requests, json, sys
+import os, requests, json, sys
 
 PROD_URL = "https://erpnext.karavanimports.com"
 S = requests.Session()
@@ -23,16 +23,11 @@ S.verify = False
 requests.packages.urllib3.disable_warnings()
 
 # ---- Auth -------------------------------------------------------------------
-authed = False
-for pwd in ("AdminAtlasLakes123!", "TempMigrate2026!"):
-    r = S.post(f"{PROD_URL}/api/method/login",
-               data={"usr": "Administrator", "pwd": pwd}, timeout=20)
-    if r.status_code == 200:
-        print(f"Logged in\n")
-        authed = True
-        break
-if not authed:
+r = S.post(f"{PROD_URL}/api/method/login",
+           data={"usr": "Administrator", "pwd": os.environ.get("ERP_ADMIN_PWD")}, timeout=20)
+if r.status_code != 200:
     sys.exit(f"Login failed: {r.status_code} {r.text[:200]}")
+print("Logged in\n")
 
 
 def _q(name):

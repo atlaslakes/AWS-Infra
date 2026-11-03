@@ -9,7 +9,7 @@
       "",
       "TEST_USER = 'customer.test@atlaslakes.com'",
       "TEST_FULL_NAME = 'Customer Test'",
-      "TEST_PASSWORD = 'Temp@12345'",
+      "TEST_PASSWORD = '<SET_TEST_PASSWORD>'",
       "CUSTOMER_ROLE = 'Customer'",
       "WORKSPACE = 'Customer Dashboard'",
       "WORKSPACE_TITLE_SLUG = 'customer-dashboard'",

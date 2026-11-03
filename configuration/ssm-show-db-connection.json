@@ -23,7 +23,7 @@
       "docker exec -w /home/frappe/frappe-bench frappe_docker-backend-1 bench --site frontend execute frappe.db.sql --args \"[\\\"SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='erpnext'\\\"]\"",
       "echo ''",
       "echo '--- Host-level MySQL client to RDS ---'",
-      "mysql -h erpnext-poc-erpnextdb-ooorv168mrw1.c2diyosis802.us-east-1.rds.amazonaws.com -u erpnext -pAtlasLakesAws123! erpnext -e \"SELECT @@hostname AS rds_host, @@version AS mariadb_version; SELECT COUNT(*) AS erpnext_tables FROM information_schema.tables WHERE table_schema='erpnext';\" 2>&1 || echo 'mysql client not installed on host'",
+      "mysql -h erpnext-poc-erpnextdb-ooorv168mrw1.c2diyosis802.us-east-1.rds.amazonaws.com -u erpnext -p<DB_PASSWORD> erpnext -e \"SELECT @@hostname AS rds_host, @@version AS mariadb_version; SELECT COUNT(*) AS erpnext_tables FROM information_schema.tables WHERE table_schema='erpnext';\" 2>&1 || echo 'mysql client not installed on host'",
       "echo ''",
       "echo '========================================='",
       "echo '   Redis PING to ElastiCache (cache)     '",

@@ -150,8 +150,8 @@ Responsibilities:
 
 ```
 ERPNEXT_URL       = https://3.216.86.193
-ERPNEXT_API_KEY   = 647f56b706a1bea
-ERPNEXT_API_SECRET= 6c615d3ea8cbd4d
+ERPNEXT_API_KEY   = (from ERPNext User → API Access)
+ERPNEXT_API_SECRET= (from ERPNext User → API Access)
 TOAST_CLIENT_ID   = (from Toast dashboard)
 TOAST_CLIENT_SECRET = (from Toast dashboard)
 TOAST_RESTAURANT_GUID = (from Toast dashboard)
