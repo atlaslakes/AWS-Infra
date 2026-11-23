@@ -32,6 +32,38 @@ Parameters:
     Default: ''
     Description: Email address for CloudWatch alarm notifications on Lambda errors. Leave blank to disable.
 
+  CardSurchargeRate:
+    Type: String
+    Default: '0.03'
+    AllowedPattern: '^0(\.\d+)?$'
+    Description: Surcharge on CREDIT cards only (debit/prepaid/ACH never). Hard-capped at 0.03 in code too.
+
+  CardSurchargeExcludedStates:
+    Type: String
+    Default: 'CT,MA'
+    Description: Comma-separated US state codes whose customers are never surcharged.
+
+  CardSurchargeAccountName:
+    Type: String
+    Default: Credit Card Surcharge Income
+    Description: ERPNext Account (account_name) the webhook books collected surcharges to.
+
+  LegacyPayNow:
+    Type: String
+    Default: enabled
+    AllowedValues: [enabled, disabled]
+    Description: Old POST /pay-now (no surcharge). Set to disabled once the portal uses /pay-now/quote + /pay-now/confirm.
+
+  TerminalLocationId:
+    Type: String
+    Default: ''
+    Description: Stripe Terminal Location (tml_...) for Tap to Pay. Blank = use the account's first Location.
+
+  TerminalAllowedRoles:
+    Type: String
+    Default: Accounts User,Sales User
+    Description: ERPNext roles allowed to take Tap to Pay payments from the mobile app.
+
   # NOTE: Stripe / ERPNext / Base44 credentials are NOT template parameters —
   # they used to be (back when this was the Dwolla/Plaid version), which left
   # them retrievable via describe-stacks and change-set history. They live
@@ -56,6 +88,15 @@ Metadata:
           default: Monitoring
         Parameters:
           - NotificationEmail
+      - Label:
+          default: Card surcharge + Tap to Pay
+        Parameters:
+          - CardSurchargeRate
+          - CardSurchargeExcludedStates
+          - CardSurchargeAccountName
+          - LegacyPayNow
+          - TerminalLocationId
+          - TerminalAllowedRoles
 
 Conditions:
   IsProd: !Equals [!Ref Environment, prod]
@@ -147,6 +188,30 @@ Resources:
         Variables:
           PAYMENTS_SECRET_ARN: !Ref PaymentsSecret
           ERPNEXT_URL: !Ref ERPNextURL
+          CARD_SURCHARGE_RATE: !Ref CardSurchargeRate
+          CARD_SURCHARGE_EXCLUDED_STATES: !Ref CardSurchargeExcludedStates
+          LEGACY_PAY_NOW: !Ref LegacyPayNow
+
+  TerminalFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub ${AWS::StackName}-terminal
+      Runtime: python3.12
+      Handler: terminal.handler.handler
+      Role: !GetAtt PaymentsLambdaRole.Arn
+      Timeout: 30
+      MemorySize: 256
+      Code:
+        S3Bucket: !Ref CodeS3Bucket
+        S3Key: !Ref CodeS3Key
+      Environment:
+        Variables:
+          PAYMENTS_SECRET_ARN: !Ref PaymentsSecret
+          ERPNEXT_URL: !Ref ERPNextURL
+          CARD_SURCHARGE_RATE: !Ref CardSurchargeRate
+          CARD_SURCHARGE_EXCLUDED_STATES: !Ref CardSurchargeExcludedStates
+          TERMINAL_LOCATION_ID: !Ref TerminalLocationId
+          TERMINAL_ALLOWED_ROLES: !Ref TerminalAllowedRoles
 
   StripeWebhookFunction:
     Type: AWS::Lambda::Function
@@ -164,6 +229,7 @@ Resources:
         Variables:
           PAYMENTS_SECRET_ARN: !Ref PaymentsSecret
           ERPNEXT_URL: !Ref ERPNextURL
+          CARD_SURCHARGE_ACCOUNT_NAME: !Ref CardSurchargeAccountName
 
   AutopayScanFunction:
     Type: AWS::Lambda::Function
@@ -188,7 +254,9 @@ Resources:
       Name: !Sub ${AWS::StackName}-autopay-scan-schedule
       Description: Triggers autopay-scan hourly to initiate off-session Stripe charges for due, auto-pay-enabled invoices.
       ScheduleExpression: rate(1 hour)
-      State: ENABLED
+      # Dev shares the production ERPNext site, so its scan stays off to keep
+      # test-mode charges and Payment Entries off real invoices.
+      State: !If [IsProd, ENABLED, DISABLED]
       Targets:
         - Id: AutopayScanFunction
           Arn: !GetAtt AutopayScanFunction.Arn
@@ -276,6 +344,65 @@ Resources:
       Principal: apigateway.amazonaws.com
       SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${PaymentsApi}/*/*/pay-now
 
+  PayNowQuoteRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref PaymentsApi
+      RouteKey: POST /pay-now/quote
+      Target: !Sub integrations/${PayNowIntegration}
+
+  PayNowConfirmRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref PaymentsApi
+      RouteKey: POST /pay-now/confirm
+      Target: !Sub integrations/${PayNowIntegration}
+
+  PayNowSubroutesPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref PayNowFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${PaymentsApi}/*/*/pay-now/*
+
+  TerminalIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref PaymentsApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !GetAtt TerminalFunction.Arn
+      PayloadFormatVersion: '2.0'
+
+  TerminalConnectionTokenRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref PaymentsApi
+      RouteKey: POST /terminal/connection-token
+      Target: !Sub integrations/${TerminalIntegration}
+
+  TerminalPaymentIntentRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref PaymentsApi
+      RouteKey: POST /terminal/payment-intent
+      Target: !Sub integrations/${TerminalIntegration}
+
+  TerminalApplySurchargeRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref PaymentsApi
+      RouteKey: POST /terminal/apply-surcharge
+      Target: !Sub integrations/${TerminalIntegration}
+
+  TerminalPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref TerminalFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${PaymentsApi}/*/*/terminal/*
+
   StripeWebhookIntegration:
     Type: AWS::ApiGatewayV2::Integration
     Properties:
@@ -356,7 +483,7 @@ Resources:
 
 Outputs:
   ApiBaseUrl:
-    Description: Base URL Base44 should call for /setup-intent, /attach-payment-method, and /pay-now.
+    Description: Base URL for Base44 (/setup-intent, /attach-payment-method, /pay-now/quote, /pay-now/confirm) and the Tap to Pay app (/terminal/*).
     Value: !Sub https://${PaymentsApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}
 
   StripeWebhookUrl:

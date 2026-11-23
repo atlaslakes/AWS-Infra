@@ -51,11 +51,42 @@ def _cancel_payment_entries_for(erp, payment_intent_id):
             erp.cancel("Payment Entry", pe["name"])
 
 
-def _create_payment_entry(erp, invoice_doctype, invoice_name, amount, payment_intent_id, ref_date, mode_of_payment):
+def _surcharge_deduction(erp, company, surcharge):
+    """Payment Entry deduction row booking a credit-card surcharge as income.
+    On a Receive entry ERPNext requires party_amount - received - deductions
+    == 0, so the extra money collected goes in as a NEGATIVE deduction
+    (which posts as a credit to the income account)."""
+    account_name = os.environ.get("CARD_SURCHARGE_ACCOUNT_NAME", "Credit Card Surcharge Income")
+    accounts = erp.list(
+        "Account",
+        filters=[["account_name", "=", account_name], ["company", "=", company], ["is_group", "=", 0]],
+        fields=["name"],
+        limit=1,
+    )
+    if not accounts:
+        # Raise (-> 500) so Stripe retries and the errors alarm fires; run
+        # scripts/setup/setup_card_surcharge.py to create the account.
+        raise RuntimeError(f"Account {account_name!r} not found for company {company!r}")
+    company_doc = erp.get("Company", company) or {}
+    return {
+        "account": accounts[0]["name"],
+        "cost_center": company_doc.get("cost_center"),
+        "amount": -round(surcharge, 2),
+        "description": "Credit card surcharge",
+    }
+
+
+def _create_payment_entry(erp, invoice_doctype, invoice_name, amount, payment_intent_id, ref_date, mode_of_payment,
+                          surcharge=0.0):
     """Idempotent: if a Payment Entry already carries this PaymentIntent id as
-    its reference_no, the completion event was already processed."""
+    its reference_no, the completion event was already processed.
+
+    amount is what Stripe collected. surcharge (credit-card fee, if any) is
+    part of amount but is NOT applied to the invoice — only amount - surcharge
+    is allocated; the surcharge is booked to the surcharge income account."""
     if erp.exists("Payment Entry", [["reference_no", "=", payment_intent_id]]):
         return None
+    applied = round(amount - surcharge, 2)
 
     # Deliberately NOT passing party_amount here: ERPNext's get_payment_entry
     # receives it as a raw querystring value and, in the version this site
@@ -71,15 +102,21 @@ def _create_payment_entry(erp, invoice_doctype, invoice_name, amount, payment_in
     if not pe:
         raise RuntimeError(f"get_payment_entry returned nothing for {invoice_doctype} {invoice_name}")
 
+    if abs(applied - float(pe.get("paid_amount") or 0)) > 0.01:
+        for ref in pe.get("references") or []:
+            if ref.get("reference_doctype") == invoice_doctype and ref.get("reference_name") == invoice_name:
+                ref["allocated_amount"] = applied
+
     if abs(amount - float(pe.get("paid_amount") or 0)) > 0.01:
         pe["paid_amount"] = amount
         pe["received_amount"] = amount
         pe["base_paid_amount"] = amount
         pe["base_received_amount"] = amount
         pe["unallocated_amount"] = 0.0
-        for ref in pe.get("references") or []:
-            if ref.get("reference_doctype") == invoice_doctype and ref.get("reference_name") == invoice_name:
-                ref["allocated_amount"] = amount
+
+    if surcharge > 0:
+        pe["deductions"] = [_surcharge_deduction(erp, pe["company"], surcharge)]
+        pe["difference_amount"] = 0.0
 
     pe["mode_of_payment"] = mode_of_payment
     pe["reference_no"] = payment_intent_id
@@ -118,9 +155,11 @@ def _handle_payment_succeeded(client, erp, payment_intent):
         if created_ts else datetime.date.today().isoformat()
     )
     mode_of_payment = _mode_of_payment(client, payment_intent)
+    surcharge = int(metadata.get("surcharge_cents") or 0) / 100.0
 
     pe_name = _create_payment_entry(
         erp, invoice_doctype, invoice_name, amount, payment_intent["id"], ref_date, mode_of_payment,
+        surcharge=surcharge,
     )
 
     if installment_row:

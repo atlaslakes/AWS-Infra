@@ -54,22 +54,60 @@ def retrieve_mandate(client, mandate_id):
 
 
 def create_payment_intent(client, *, customer_id, amount_cents, currency, payment_method_types,
-                          metadata, idempotency_key, payment_method_id=None,
-                          off_session=False, confirm=False):
+                          metadata, idempotency_key=None, payment_method_id=None,
+                          off_session=False, confirm=False, confirmation_token=None,
+                          description=None):
     kwargs = {
-        "customer": customer_id,
         "amount": int(amount_cents),
         "currency": currency,
         "payment_method_types": list(payment_method_types),
         "metadata": metadata,
     }
+    if customer_id:
+        kwargs["customer"] = customer_id
     if payment_method_id:
         kwargs["payment_method"] = payment_method_id
     if off_session:
         kwargs["off_session"] = True
     if confirm:
         kwargs["confirm"] = True
-    return client.PaymentIntent.create(**kwargs, idempotency_key=idempotency_key)
+    if confirmation_token:
+        kwargs["confirmation_token"] = confirmation_token
+    if description:
+        kwargs["description"] = description
+    if idempotency_key:
+        return client.PaymentIntent.create(**kwargs, idempotency_key=idempotency_key)
+    return client.PaymentIntent.create(**kwargs)
+
+
+def card_funding_from_confirmation_token(token):
+    """(method_type, funding, brand, last4) from a ConfirmationToken's
+    payment_method_preview. funding is None for non-card methods."""
+    preview = token.to_dict()["payment_method_preview"]
+    method_type = preview["type"]
+    if method_type == "card":
+        card = preview.get("card") or {}
+        return method_type, card.get("funding"), card.get("brand"), card.get("last4")
+    return method_type, None, None, None
+
+
+def blocking_payment_intent(client, erp, invoice_doctype, invoice_name):
+    """Id of a PaymentIntent that should stop a NEW payment on this invoice,
+    or None. Blocks when a payment is still in flight (ACH 'processing') or
+    has succeeded but the webhook hasn't posted its Payment Entry yet — the
+    invoice's outstanding_amount wouldn't reflect it, so a second charge
+    would double-bill."""
+    safe_name = invoice_name.replace("\\", "\\\\").replace("'", "\\'")
+    found = client.PaymentIntent.search(query=f"metadata['invoice_name']:'{safe_name}'", limit=20)
+    for obj in found.data:
+        pi = obj.to_dict()
+        if (pi.get("metadata") or {}).get("invoice_doctype") != invoice_doctype:
+            continue
+        if pi["status"] == "processing":
+            return pi["id"]
+        if pi["status"] == "succeeded" and not erp.exists("Payment Entry", [["reference_no", "=", pi["id"]], ["docstatus", "=", 1]]):
+            return pi["id"]
+    return None
 
 
 def retrieve_payment_intent(client, payment_intent_id):

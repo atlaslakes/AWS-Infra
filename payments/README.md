@@ -14,7 +14,8 @@ payments/
     │   └── stripe_client.py   # Stripe customer/setup-intent/payment-intent/webhook helpers
     ├── setup_intent/           # POST /setup-intent — issues a SetupIntent for Base44 to confirm with Stripe.js
     ├── attach_payment_method/  # POST /attach-payment-method — writes the confirmed PaymentMethod back onto the ERPNext party
-    ├── pay_now/                # POST /pay-now — on-demand one-time payment against an invoice
+    ├── pay_now/                # POST /pay-now/quote + /pay-now/confirm — one-time invoice payment, credit-card surcharge (legacy POST /pay-now: no surcharge)
+    ├── terminal/               # POST /terminal/* — Tap to Pay mobile app (ERPNext-login auth), credit-card surcharge
     ├── autopay_scan/           # EventBridge (hourly) — finds due autopay invoices/installments, initiates off-session charges
     └── stripe_webhook/         # POST /webhooks/stripe — reconciles payment status into ERPNext Payment Entries
 ```
@@ -27,6 +28,12 @@ Each Lambda directory is `handler.handler` (module `handler.py`, function `handl
 - **Pay Now (one-time, on demand)**: Base44 calls `/pay-now` with an invoice — no saved payment method required. Returns a PaymentIntent `client_secret` for the customer to confirm with a card or bank account right then. The invoice's payment status is only ever updated by the webhook once Stripe confirms the charge, not by this endpoint.
 - **Auto-pay (recurring, off-session)**: the hourly `autopay-scan` Lambda scans ERPNext for invoices with `custom_autopay_enabled=1` that are due, and — for customers with a saved, verified payment method — creates an off-session `PaymentIntent` charged against the saved `custom_stripe_payment_method_id`. Bank auto-pay requires an active mandate + `custom_ach_authorization_date` on file (NACHA); cards don't.
 - **Reconciliation**: `stripe_webhook` is the single endpoint for all Stripe events (`payment_intent.succeeded`/`payment_intent.payment_failed`/`mandate.updated`/etc.), verified via `Stripe-Signature`. On success it builds+submits a Payment Entry via ERPNext's `get_payment_entry` whitelisted method, idempotent on `Payment Entry.reference_no == payment_intent.id`.
+
+- **Credit-card surcharge / Tap to Pay**: see [../docs/CARD-SURCHARGE-TAP-TO-PAY.md](../docs/CARD-SURCHARGE-TAP-TO-PAY.md). 3% on credit cards only (Pay Now + Tap to Pay; never debit/prepaid/ACH/autopay); booked as a Payment Entry deduction to `Credit Card Surcharge Income`.
+
+## Tests
+
+`python -m unittest discover -s payments/tests -v` — offline (Stripe/ERPNext faked).
 
 ## Local development
 
